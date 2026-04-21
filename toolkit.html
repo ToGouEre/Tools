@@ -112,6 +112,32 @@
   .config-list{margin:8px 0 0;padding-left:18px;color:var(--text-dim);font-size:12.5px}
   .config-list li{margin:2px 0}
 
+  /* collapsible details */
+  details.card{padding:0;transition:border-color .15s ease}
+  details.card > summary{list-style:none;cursor:pointer;padding:16px 22px;display:flex;align-items:center;gap:10px;user-select:none;border-radius:var(--radius)}
+  details.card > summary::-webkit-details-marker{display:none}
+  details.card > summary .chev{width:16px;height:16px;color:var(--text-muted);transition:transform .15s ease;flex:0 0 16px}
+  details.card[open] > summary .chev{transform:rotate(90deg);color:var(--accent)}
+  details.card > summary .sum-title{font-weight:600;font-size:14px;color:var(--text)}
+  details.card > summary .sum-sub{color:var(--text-muted);font-size:12px;margin-left:auto}
+  details.card > summary:hover{background:rgba(124,156,255,.04)}
+  details.card[open] > summary{border-bottom:1px solid var(--border)}
+  details.card > .details-body{padding:18px 22px 22px}
+
+  /* header right-side meta */
+  .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .header-right a.link-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--text-dim);font-size:11.5px;transition:all .15s ease}
+  .header-right a.link-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* unified compact option rows */
+  .opt-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  .opt-row + .opt-row{margin-top:8px}
+  .opt-row .label{font-size:12px;color:var(--text-muted);width:70px;flex:0 0 70px}
+
+  /* grid for upload area at top */
+  .upload-grid{display:grid;grid-template-columns:minmax(280px,1fr) 1fr;gap:18px;align-items:start}
+  @media (max-width:900px){ .upload-grid{grid-template-columns:1fr} }
+
   .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
   .result-section{display:none}
   .result-section.show{display:block}
@@ -157,55 +183,53 @@
           <h1 class="page-title">评测 JSONL → Excel 转换器</h1>
           <div class="page-sub">把 Langfuse 评测导出的 .jsonl 整理成结构化 Excel。数据不离开本机。</div>
         </div>
-        <span class="badge dot">浏览器本地处理</span>
-      </div>
-
-      <div class="card">
-        <h3>处理逻辑</h3>
-        <div class="flow">
-          <div class="step"><h4><span class="num">1</span>解析 JSONL</h4><p>按行读取，每行一条 trace 记录；提取 datasetItemId、messages、baseline_model_response、traceOutput、scores。</p></div>
-          <div class="step"><h4><span class="num">2</span>按 item 聚合</h4><p>同一 datasetItemId 可能有多条记录，优先挑有 traceOutput 的那条；顺序按首次出现固定。</p></div>
-          <div class="step"><h4><span class="num">3</span>字段提取</h4><p>query 取 messages 最后一条的纯文本（跳过 resource / image 标签）；eval_answer 取 final_output 里 type=text 的部分。</p></div>
-          <div class="step"><h4><span class="num">4</span>代码符号清洗</h4><p>baseline_answer / eval_answer 剥 ``` 代码块围栏、反引号、# 标题、**粗体** 等 Markdown，保留排版与换行。</p></div>
-          <div class="step"><h4><span class="num">5</span>分数展开</h4><p>自动识别：多配置（9 个评测维度，每个两列：分数 + 理由）或单配置（score_config/value/comment）。</p></div>
-          <div class="step"><h4><span class="num">6</span>长内容兜底</h4><p>单元格超过 Excel 上限 32767 字符时截断，并把完整原文写入同一个 zip 的 .txt 附件，不丢失内容。</p></div>
+        <div class="header-right">
+          <span class="badge dot">浏览器本地处理</span>
+          <a class="link-btn" href="https://github.com/ToGouEre/Tools" target="_blank" rel="noopener">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.72-4.04-1.61-4.04-1.61-.55-1.38-1.33-1.75-1.33-1.75-1.08-.74.08-.73.08-.73 1.2.09 1.83 1.23 1.83 1.23 1.07 1.83 2.81 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.54-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .3"/></svg>
+            源码
+          </a>
         </div>
       </div>
 
       <div class="card">
-        <h3>上传文件</h3>
-        <div class="desc">支持 .jsonl（单文件或多文件同时处理）。程序会自动识别是「多配置评测」（74428-Vision_x36_v0 风格）还是「竞技场对比」（74453-Arena 风格）。</div>
+        <h3>上传 & 转换</h3>
+        <div class="desc">支持 .jsonl（单文件或多文件同时处理）。程序会自动识别是「多配置评测」还是「竞技场对比」两种 schema。</div>
 
-        <label class="dropzone" id="dropzone">
-          <div class="icon-wrap">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div class="upload-grid">
+          <label class="dropzone" id="dropzone">
+            <div class="icon-wrap">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div class="main-text">把 .jsonl 拖到这里</div>
+            <div class="hint">或点击选择 · 支持多选 · 本地处理不上传</div>
+            <input type="file" id="fileInput" accept=".jsonl,application/x-ndjson,application/json" multiple>
+          </label>
+
+          <div>
+            <div class="opt-row">
+              <span class="label">模式</span>
+              <label class="opt"><input type="radio" name="mode" value="auto" checked><span>自动识别</span></label>
+              <label class="opt"><input type="radio" name="mode" value="multi"><span>多配置评测</span></label>
+              <label class="opt"><input type="radio" name="mode" value="single"><span>竞技场对比</span></label>
+            </div>
+            <div class="opt-row">
+              <span class="label">清洗</span>
+              <label class="opt"><input type="checkbox" id="optClean" checked><span>eval_answer Markdown</span></label>
+              <label class="opt"><input type="checkbox" id="optCleanBaseline" checked><span>baseline_answer Markdown</span></label>
+            </div>
+
+            <div class="actions">
+              <button class="btn primary" id="btnConvert" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                开始转换
+              </button>
+              <button class="btn ghost" id="btnClear">清空</button>
+            </div>
           </div>
-          <div class="main-text">把 .jsonl 文件拖到这里，或点击选择</div>
-          <div class="hint">支持多选 · 仅在本地处理，不会上传到任何服务器</div>
-          <input type="file" id="fileInput" accept=".jsonl,application/x-ndjson,application/json" multiple>
-        </label>
-
-        <div class="options">
-          <label class="opt"><input type="radio" name="mode" value="auto" checked><span>自动识别 <small>根据 score 名称判断</small></span></label>
-          <label class="opt"><input type="radio" name="mode" value="multi"><span>多配置评测 <small>74428 风格</small></span></label>
-          <label class="opt"><input type="radio" name="mode" value="single"><span>竞技场对比 <small>74453 风格</small></span></label>
-        </div>
-
-        <div class="options">
-          <label class="opt"><input type="checkbox" id="optClean" checked><span>清洗 eval_answer 的 Markdown 代码符号 <small>推荐</small></span></label>
-          <label class="opt"><input type="checkbox" id="optCleanBaseline" checked><span>同样处理 baseline_answer <small>推荐</small></span></label>
         </div>
 
         <div id="fileList"></div>
-
-        <div class="actions">
-          <button class="btn primary" id="btnConvert" disabled>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-            开始转换
-          </button>
-          <button class="btn ghost" id="btnClear">清空</button>
-        </div>
-
         <div class="progress" id="progress" style="display:none"><div class="bar" id="progressBar"></div></div>
         <div class="log" id="log" style="display:none"></div>
       </div>
@@ -215,36 +239,60 @@
         <div id="resultsContainer"></div>
       </div>
 
-      <div class="card">
-        <h3>输出列说明</h3>
-        <p style="color:var(--text-dim);font-size:12.5px;margin:0 0 10px">两种模式都会生成一行一 item（按源文件里 datasetItemId 首次出现顺序编号）。没有 traceOutput 的 item 会保留 query / key_point，分数列留空。</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
-          <div>
-            <div style="font-weight:600;margin-bottom:6px">多配置评测 · 动态列数</div>
-            <ul class="config-list">
-              <li>序号 / datasetItemId / query / baseline_answer / eval_answer / <b>thinking</b> / key_point</li>
-              <li>下游分数列按文件实际出现的 score.name 动态拼接，每个两列：<code>[xxx] 分数</code> / <code>[xxx] 理由</code></li>
-              <li>已知顺序（优先）：online-单向-truthful / if / reasoning / perception、Vision-限制性指令、Vision-AI生图识别、底线-Repeat / 不正常输出代码 / 语言杂糅 / 不合理拒答</li>
-              <li>文件里出现的其他新 score 名称会自动追加在已知列后面</li>
-            </ul>
-          </div>
-          <div>
-            <div style="font-weight:600;margin-bottom:6px">竞技场对比 · 10 列</div>
-            <ul class="config-list">
-              <li>序号</li>
-              <li>datasetItemId</li>
-              <li>query</li>
-              <li>baseline_answer</li>
-              <li>eval_answer</li>
-              <li><b>thinking</b></li>
-              <li>key_point</li>
-              <li>score_config</li>
-              <li>score_value（Better / Worse / Same）</li>
-              <li>score_comment</li>
-            </ul>
+      <details class="card">
+        <summary>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="sum-title">处理逻辑</span>
+          <span class="sum-sub">点击展开查看 6 步流程</span>
+        </summary>
+        <div class="details-body">
+          <div class="flow">
+            <div class="step"><h4><span class="num">1</span>解析 JSONL</h4><p>按行读取，每行一条 trace 记录；提取 datasetItemId、messages、baseline_model_response、traceOutput、scores。</p></div>
+            <div class="step"><h4><span class="num">2</span>按 item 聚合</h4><p>同一 datasetItemId 可能有多条记录，优先挑有 traceOutput 的那条；顺序按首次出现固定。</p></div>
+            <div class="step"><h4><span class="num">3</span>字段提取</h4><p>query 取 messages 最后一条的纯文本（跳过 resource / image 标签）；eval_answer 取 final_output.content 里 type=text 部分；thinking 取 type=think/thinking/reasoning 部分（或 final_output.thinking / reasoning_content 兜底）。内容按原样保留，不截断也不做额外处理。</p></div>
+            <div class="step"><h4><span class="num">4</span>代码符号清洗</h4><p>baseline_answer / eval_answer / thinking 剥 ``` 代码块围栏、反引号、# 标题、**粗体** 等 Markdown，保留排版与换行。</p></div>
+            <div class="step"><h4><span class="num">5</span>分数展开</h4><p>自动识别：多配置（每个评测维度两列：分数 + 理由，列数按文件实际出现的 score 动态）或单配置（score_config/value/comment）。</p></div>
+            <div class="step"><h4><span class="num">6</span>长内容直出</h4><p>Excel 规格单元格上限 32767 字符；本工具已解除 SheetJS 的硬校验，超长也原样写入 xlsx。Excel / WPS 的显示表现取决于各自实现。</p></div>
           </div>
         </div>
-      </div>
+      </details>
+
+      <details class="card">
+        <summary>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="sum-title">输出列说明</span>
+          <span class="sum-sub">两种 schema 的列布局</span>
+        </summary>
+        <div class="details-body">
+          <p style="color:var(--text-dim);font-size:12.5px;margin:0 0 10px">两种模式都会生成一行一 item（按源文件里 datasetItemId 首次出现顺序编号）。没有 traceOutput 的 item 会保留 query / key_point，分数列留空。</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+            <div>
+              <div style="font-weight:600;margin-bottom:6px">多配置评测 · 动态列数</div>
+              <ul class="config-list">
+                <li>序号 / datasetItemId / query / baseline_answer / eval_answer / <b>thinking</b> / key_point</li>
+                <li>下游分数列按文件实际出现的 score.name 动态拼接，每个两列：<code>[xxx] 分数</code> / <code>[xxx] 理由</code></li>
+                <li>已知顺序（优先）：online-单向-truthful / if / reasoning / perception、Vision-限制性指令、Vision-AI生图识别、底线-Repeat / 不正常输出代码 / 语言杂糅 / 不合理拒答</li>
+                <li>文件里出现的其他新 score 名称会自动追加在已知列后面</li>
+              </ul>
+            </div>
+            <div>
+              <div style="font-weight:600;margin-bottom:6px">竞技场对比 · 10 列</div>
+              <ul class="config-list">
+                <li>序号</li>
+                <li>datasetItemId</li>
+                <li>query</li>
+                <li>baseline_answer</li>
+                <li>eval_answer</li>
+                <li><b>thinking</b></li>
+                <li>key_point</li>
+                <li>score_config</li>
+                <li>score_value（Better / Worse / Same）</li>
+                <li>score_comment</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
     </section>
   </main>
 </div>
