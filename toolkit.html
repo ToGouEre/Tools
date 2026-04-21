@@ -243,7 +243,7 @@
         <summary>
           <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           <span class="sum-title">处理逻辑</span>
-          <span class="sum-sub">点击展开查看 6 步流程</span>
+          <span class="sum-sub">点击展开查看 7 步流程</span>
         </summary>
         <div class="details-body">
           <div class="flow">
@@ -253,6 +253,7 @@
             <div class="step"><h4><span class="num">4</span>代码符号清洗</h4><p>baseline_answer / eval_answer / thinking 剥 ``` 代码块围栏、反引号、# 标题、**粗体** 等 Markdown，保留排版与换行。</p></div>
             <div class="step"><h4><span class="num">5</span>分数展开</h4><p>自动识别：多配置（每个评测维度两列：分数 + 理由，列数按文件实际出现的 score 动态）或单配置（score_config/value/comment）。</p></div>
             <div class="step"><h4><span class="num">6</span>长内容直出</h4><p>Excel 规格单元格上限 32767 字符；本工具已解除 SheetJS 的硬校验，超长也原样写入 xlsx。Excel / WPS 的显示表现取决于各自实现。</p></div>
+            <div class="step"><h4><span class="num">7</span>回读自检</h4><p>生成 xlsx 后立即用 XLSX.read 重新解析，把每一行每一列的读回值与原始写入值逐字对比，报告任何不一致（位置、长度、首差位置、片段对照）。通过即保证所有内容完整无遗漏。</p></div>
           </div>
         </div>
       </details>
@@ -555,6 +556,15 @@ async function convertOne(file, opts, log, progress){
   const xlsxArray = XLSX.write(wb, {bookType:'xlsx', type:'array', cellStyles:true});
   progress(80);
 
+  // Self-check: read the xlsx back and compare every cell to the original
+  log('  正在自检（回读 xlsx 并逐格比对）...');
+  const check = selfCheck(rowsData, mode, xlsxArray);
+  if(check.fullyOk){
+    log(`✓ 自检通过：${check.checked} 个单元格全部完整，总字符数 ${check.totalChars.toLocaleString()}`, 'ok');
+  } else {
+    log(`✗ 自检发现 ${check.mismatchCount} 处不一致（共检查 ${check.checked} 格）`, 'err');
+  }
+
   // Stats
   const stats = {
     rows: rowsData.length,
@@ -575,7 +585,95 @@ async function convertOne(file, opts, log, progress){
   const outName = `${baseName}.xlsx`;
   progress(100);
   log(`✓ 完成: ${outName} (${(blob.size/1024).toFixed(1)} KB)`, 'ok');
-  return {blob, outName, stats, sourceName: file.name};
+  return {blob, outName, stats, check, sourceName: file.name};
+}
+
+// ====== Self-check (read-back integrity) ======
+function buildExpectedAoa(rowsData, mode){
+  if(mode === 'single'){
+    const header = ['序号','datasetItemId','query','baseline_answer','eval_answer','thinking','key_point','score_config','score_value','score_comment'];
+    const aoa = [header];
+    for(const r of rowsData){
+      const s = r.scores[0];
+      aoa.push([
+        r.idx, r.itemId, r.query, r.baseline_answer, r.eval_answer, r.thinking, r.key_point,
+        s ? String(s.name||'').trim() : '',
+        s ? (s.stringValue ?? s.value ?? '') : '',
+        s ? (s.comment ?? '') : ''
+      ]);
+    }
+    return aoa;
+  }
+  const CONFIGS = collectConfigs(rowsData);
+  const header = ['序号','datasetItemId','query','baseline_answer','eval_answer','thinking','key_point'];
+  for(const cfg of CONFIGS){ header.push(`[${cfg}] 分数`); header.push(`[${cfg}] 理由`); }
+  const aoa = [header];
+  for(const r of rowsData){
+    const byName = new Map();
+    for(const s of r.scores){
+      const n = String(s.name||'').trim();
+      if(!byName.has(n)) byName.set(n, s);
+    }
+    const row = [r.idx, r.itemId, r.query, r.baseline_answer, r.eval_answer, r.thinking, r.key_point];
+    for(const cfg of CONFIGS){
+      const s = byName.get(cfg);
+      row.push(s ? (s.stringValue ?? s.value ?? '') : '');
+      row.push(s ? (s.comment ?? '') : '');
+    }
+    aoa.push(row);
+  }
+  return aoa;
+}
+function selfCheck(rowsData, mode, xlsxArray){
+  const wb = XLSX.read(xlsxArray, {type:'array'});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const readback = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+  const expected = buildExpectedAoa(rowsData, mode);
+  const mismatches = [];
+  let checked = 0, totalChars = 0;
+  const rows = expected.length;
+  // row mismatch?
+  const rowCountOk = readback.length === expected.length;
+  for(let r=0; r<rows; r++){
+    const exp = expected[r] || [];
+    const got = readback[r] || [];
+    // column count per row
+    for(let c=0; c<exp.length; c++){
+      checked++;
+      const e = exp[c];
+      const g = got[c];
+      // numeric tolerance
+      if(typeof e === 'number' && typeof g === 'number' && e === g) continue;
+      const eStr = (e === undefined || e === null) ? '' : String(e);
+      const gStr = (g === undefined || g === null) ? '' : String(g);
+      totalChars += eStr.length;
+      if(eStr === gStr) continue;
+      let diff = 0;
+      const minLen = Math.min(eStr.length, gStr.length);
+      while(diff < minLen && eStr.charCodeAt(diff) === gStr.charCodeAt(diff)) diff++;
+      mismatches.push({
+        row: r,
+        col: c,
+        header: String(expected[0][c] || ''),
+        expectedLen: eStr.length,
+        gotLen: gStr.length,
+        firstDiffAt: diff,
+        expectedSample: eStr.slice(Math.max(0, diff-10), diff+40),
+        gotSample: gStr.slice(Math.max(0, diff-10), diff+40),
+      });
+    }
+  }
+  return {
+    checked,
+    totalChars,
+    mismatchCount: mismatches.length,
+    rowCountOk,
+    expectedRows: expected.length - 1,
+    readbackRows: readback.length - 1,
+    mismatches: mismatches.slice(0, 50),
+    mismatchesTotal: mismatches.length,
+    fullyOk: mismatches.length === 0 && rowCountOk,
+  };
 }
 
 // ====== UI wiring ======
