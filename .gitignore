@@ -1,0 +1,13 @@
+# Local user data — never push
+/74428-Vision_*.xlsx
+/74453-*.xlsx
+/74453-long-eval-answers/
+_test_*.xlsx
+_verify_*.xlsx
+_patch_test.xlsx
+_t.xlsx
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
