@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OpenClaw · Toolkit</title>
 <script src="./lib/xlsx.full.min.js"></script>
+<script src="./lib/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
 <style>
   :root{
     --bg:#0b0d12; --bg-2:#12151d; --panel:#161a24; --panel-2:#1d2230;
@@ -149,6 +153,80 @@
     .layout{grid-template-columns:1fr}
     .sidebar{position:static;height:auto;border-right:none;border-bottom:1px solid var(--border)}
   }
+
+  /* ===== Markdown 转译 ===== */
+  .md-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .md-toolbar .spacer{flex:1}
+  .md-opt{display:inline-flex;gap:6px;align-items:center;color:var(--text-dim);font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);cursor:pointer;user-select:none;transition:all .15s ease}
+  .md-opt:hover{border-color:var(--accent);color:var(--text)}
+  .md-opt input{accent-color:var(--accent);margin:0}
+  .md-opt.md-trans-toggle{gap:4px}
+  .md-opt.md-trans-toggle input:checked ~ *{color:var(--accent)}
+
+  .md-select{font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);color:var(--text);cursor:pointer;outline:none;transition:border-color .15s ease}
+  .md-select:hover{border-color:var(--accent)}
+  .md-select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,156,255,.15)}
+
+  .md-trans-status{font-size:11.5px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border)}
+  .md-trans-status.busy{color:var(--accent);border-color:rgba(124,156,255,.35);background:rgba(124,156,255,.06)}
+  .md-trans-status.ok{color:var(--ok);border-color:rgba(98,224,199,.35);background:rgba(98,224,199,.06)}
+  .md-trans-status.err{color:var(--danger);border-color:rgba(255,107,122,.4);background:rgba(255,107,122,.06)}
+  .md-trans-status .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 6px}
+  .md-trans-status.busy .dot{animation:mdpulse 1.2s ease-in-out infinite}
+  @keyframes mdpulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+
+  /* Auto-detected non-translatable values (quoted items in extracted/identified context) */
+  .md-preview .notrans{background:rgba(98,224,199,.08);border-bottom:1px dashed rgba(98,224,199,.45);padding:0 2px;border-radius:3px}
+
+  .md-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:calc(100vh - 260px);min-height:520px}
+  @media (max-width:900px){
+    .md-split{grid-template-columns:1fr;height:auto}
+    .md-split .md-input,.md-split .md-preview{min-height:380px}
+  }
+  .md-input{width:100%;height:100%;font-family:"JetBrains Mono","Fira Code",Consolas,Menlo,monospace;font-size:13px;line-height:1.6;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre;transition:border-color .15s ease}
+  .md-input:focus{border-color:var(--accent)}
+
+  /* When Markdown tool is visible, break out of the 1200px cap to give more room */
+  main.main:has(#tool-markdown:not([hidden])){max-width:none;padding:18px 24px 24px}
+  main.main:has(#tool-markdown:not([hidden])) #tool-markdown .page-header{margin-bottom:12px}
+  main.main:has(#tool-markdown:not([hidden])) #tool-markdown .card{padding:14px 18px}
+
+  .md-preview{padding:14px 22px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:auto;color:var(--text);font-size:14px;line-height:1.75}
+  .md-preview > *:first-child{margin-top:0}
+  .md-preview > *:last-child{margin-bottom:0}
+  .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6{margin:18px 0 8px;line-height:1.3;font-weight:600;color:var(--text)}
+  .md-preview h1{font-size:22px;border-bottom:1px solid var(--border);padding-bottom:6px}
+  .md-preview h2{font-size:18px;border-bottom:1px solid var(--border);padding-bottom:4px}
+  .md-preview h3{font-size:16px}
+  .md-preview h4{font-size:14px}
+  .md-preview h5,.md-preview h6{font-size:13px;color:var(--text-dim)}
+  .md-preview p{margin:8px 0}
+  .md-preview ul,.md-preview ol{padding-left:26px;margin:8px 0}
+  .md-preview li{margin:3px 0}
+  .md-preview li > p{margin:4px 0}
+  .md-preview blockquote{border-left:3px solid var(--accent);padding:4px 14px;color:var(--text-dim);margin:10px 0;background:rgba(124,156,255,.06);border-radius:0 6px 6px 0}
+  .md-preview blockquote > *:first-child{margin-top:0}
+  .md-preview blockquote > *:last-child{margin-bottom:0}
+  .md-preview code{font-family:"JetBrains Mono",Consolas,Menlo,monospace;font-size:12.5px;background:var(--bg);padding:1px 6px;border-radius:4px;color:var(--accent-2);word-break:break-all}
+  .md-preview pre{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;overflow:auto;margin:10px 0}
+  .md-preview pre code{background:none;padding:0;color:var(--text);word-break:normal;white-space:pre}
+  .md-preview table{border-collapse:collapse;margin:10px 0;font-size:13px;min-width:320px}
+  .md-preview th,.md-preview td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}
+  .md-preview th{background:var(--panel);font-weight:600}
+  .md-preview tr:nth-child(even) td{background:rgba(124,156,255,.03)}
+  .md-preview a{color:var(--accent);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
+  .md-preview a:hover{text-decoration-style:solid}
+  .md-preview img{max-width:100%;border-radius:6px;display:block;margin:10px 0}
+  .md-preview hr{border:none;border-top:1px solid var(--border);margin:14px 0}
+  .md-preview input[type=checkbox]{margin-right:6px;vertical-align:middle}
+  .md-preview del{color:var(--text-muted)}
+  .md-preview kbd{display:inline-block;padding:1px 6px;border:1px solid var(--border-2);border-bottom-width:2px;border-radius:4px;background:var(--panel);font-size:11px;font-family:"JetBrains Mono",Consolas,monospace}
+
+  .md-status{color:var(--text-muted);font-size:11.5px;margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+  .md-status .sep{color:var(--border-2)}
+
+  .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--panel);color:var(--text);padding:10px 20px;border-radius:999px;border:1px solid var(--border);font-size:12.5px;z-index:9999;box-shadow:var(--shadow);transition:opacity .3s ease}
+  .toast.err{border-color:var(--danger);color:var(--danger)}
 </style>
 </head>
 <body>
@@ -165,6 +243,10 @@
     <div class="nav-item active" data-tool="jsonl2xlsx">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
       <span>评测 JSONL → Excel</span>
+    </div>
+    <div class="nav-item" data-tool="markdown">
+      <svg class="ico" viewBox="0 0 16 16" fill="currentColor"><path d="M14.85 3H1.15C.52 3 0 3.52 0 4.15v7.69C0 12.48.52 13 1.15 13h13.69c.64 0 1.15-.52 1.15-1.15v-7.7C16 3.52 15.48 3 14.85 3zM9 11H7V8L5.5 9.92 4 8v3H2V5h2l1.5 2L7 5h2v6zm2.99.5L9.5 8H11V5h2v3h1.5l-2.51 3.5z"/></svg>
+      <span>Markdown 转译</span>
     </div>
     <div class="nav-item disabled" title="敬请期待">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -294,6 +376,72 @@
           </div>
         </div>
       </details>
+    </section>
+
+    <section id="tool-markdown" hidden>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Markdown 转译</h1>
+          <div class="page-sub">左侧输入原文，右侧实时渲染预览。支持 GFM 表格、任务列表、代码块、引用等扩展语法。</div>
+        </div>
+        <div class="header-right">
+          <span class="badge dot">实时渲染</span>
+          <a class="link-btn" href="https://github.com/ToGouEre/Tools" target="_blank" rel="noopener">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.72-4.04-1.61-4.04-1.61-.55-1.38-1.33-1.75-1.33-1.75-1.08-.74.08-.73.08-.73 1.2.09 1.83 1.23 1.83 1.23 1.07 1.83 2.81 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.54-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .3"/></svg>
+            源码
+          </a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="md-toolbar">
+          <button class="btn" id="mdBtnSample">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            插入示例
+          </button>
+          <button class="btn ghost" id="mdBtnClear">清空</button>
+          <label class="md-opt"><input type="checkbox" id="mdOptBreaks" checked>单行回车即换行</label>
+          <label class="md-opt"><input type="checkbox" id="mdOptSync" checked>滚动同步</label>
+          <label class="md-opt md-trans-toggle"><input type="checkbox" id="mdOptTrans">翻译为</label>
+          <select id="mdTransLang" class="md-select" title="目标语言">
+            <option value="en">英语</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="zh-TW">繁体中文</option>
+            <option value="ja">日语</option>
+            <option value="ko">韩语</option>
+            <option value="fr">法语</option>
+            <option value="de">德语</option>
+            <option value="es">西班牙语</option>
+            <option value="ru">俄语</option>
+            <option value="vi">越南语</option>
+            <option value="th">泰语</option>
+            <option value="id">印尼语</option>
+            <option value="ar">阿拉伯语</option>
+          </select>
+          <span id="mdTransStatus" class="md-trans-status" hidden><span class="dot"></span><span class="t"></span></span>
+          <div class="spacer"></div>
+          <button class="btn" id="mdBtnCopyHtml">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            复制 HTML
+          </button>
+          <button class="btn" id="mdBtnDownloadMd">下载 .md</button>
+          <button class="btn primary" id="mdBtnDownloadHtml">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            下载 .html
+          </button>
+        </div>
+        <div class="md-split">
+          <textarea id="mdInput" class="md-input" spellcheck="false" placeholder="在这里输入 Markdown …"></textarea>
+          <div id="mdPreview" class="md-preview" aria-live="polite"></div>
+        </div>
+        <div class="md-status">
+          <span id="mdStatLen">0 字符</span>
+          <span class="sep">·</span>
+          <span id="mdStatLine">0 行</span>
+          <span class="sep">·</span>
+          <span id="mdStatWord">0 词</span>
+        </div>
+      </div>
     </section>
   </main>
 </div>
@@ -816,6 +964,511 @@ btnConvert.addEventListener('click', async ()=>{
   setTimeout(()=>{ progressBar.style.width = '0'; progressWrap.style.display = 'none'; }, 800);
   btnConvert.disabled = pendingFiles.length === 0;
 });
+
+// ====== Tool switch (sidebar nav) ======
+(function(){
+  const navs = document.querySelectorAll('.nav-item[data-tool]');
+  const sections = document.querySelectorAll('section[id^="tool-"]');
+  function show(tool){
+    navs.forEach(n => {
+      if(n.classList.contains('disabled')) return;
+      n.classList.toggle('active', n.dataset.tool === tool);
+    });
+    sections.forEach(s => { s.hidden = s.id !== 'tool-' + tool; });
+  }
+  navs.forEach(n => {
+    n.addEventListener('click', () => {
+      if(n.classList.contains('disabled')) return;
+      show(n.dataset.tool);
+    });
+  });
+})();
+
+// ====== Markdown 转译 ======
+(function(){
+  if(typeof marked === 'undefined') return;
+
+  const input = document.getElementById('mdInput');
+  const preview = document.getElementById('mdPreview');
+  const statLen = document.getElementById('mdStatLen');
+  const statLine = document.getElementById('mdStatLine');
+  const statWord = document.getElementById('mdStatWord');
+  const optBreaks = document.getElementById('mdOptBreaks');
+  const optSync = document.getElementById('mdOptSync');
+  const optTrans = document.getElementById('mdOptTrans');
+  const transLang = document.getElementById('mdTransLang');
+  const transStatusEl = document.getElementById('mdTransStatus');
+  const transStatusText = transStatusEl.querySelector('.t');
+
+  // Restore translate preference from localStorage
+  try {
+    const savedLang = localStorage.getItem('md_trans_lang');
+    if(savedLang){
+      const opt = Array.from(transLang.options).find(o => o.value === savedLang);
+      if(opt) transLang.value = savedLang;
+    }
+    const savedEnabled = localStorage.getItem('md_trans_enabled');
+    if(savedEnabled === '1') optTrans.checked = true;
+  } catch(e){ /* localStorage may be blocked */ }
+
+  function countWords(s){
+    if(!s) return 0;
+    const ascii = (s.match(/[A-Za-z0-9_]+/g) || []).length;
+    const cjk = (s.match(/[\u4e00-\u9fff]/g) || []).length;
+    return ascii + cjk;
+  }
+
+  // ---- Translation (Google Translate free endpoint) ----
+  const transCache = new Map();
+  const CACHE_MAX = 800;
+  function cacheSet(key, val){
+    transCache.set(key, val);
+    if(transCache.size > CACHE_MAX){
+      transCache.delete(transCache.keys().next().value);
+    }
+  }
+  async function googleTranslate(text, target, source){
+    if(!text.trim()) return text;
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' +
+      encodeURIComponent(source || 'auto') + '&tl=' + encodeURIComponent(target) +
+      '&dt=t&q=' + encodeURIComponent(text);
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if(!Array.isArray(data) || !Array.isArray(data[0])) throw new Error('解析翻译结果失败');
+    return data[0].map(seg => (seg && seg[0]) || '').join('');
+  }
+  async function translateCached(text, target){
+    const key = target + '||' + text;
+    if(transCache.has(key)) return transCache.get(key);
+    const t = await googleTranslate(text, target);
+    cacheSet(key, t);
+    return t;
+  }
+
+  // --- Smart-skip: mark "extracted / identified" values so they aren't translated ---
+  // Cue phrases that imply the quoted tokens are literal extracted/identified values
+  const NT_CUE_RE = /(?:识别|提取|抽取|检测|OCR|文字识别|图像识别|推理|解析|得出|判定|判断|标注|匹配到|命中|抽出|命名实体|关键词|原文|字段|输出结果?|识别结果?|提取结果?)|(?:\b(?:extracted|identified|recognized|detected|parsed|matched|named\s+entity|ocr|keyword|field|output)\b)/iu;
+  // Quoted segments — paired ASCII + CJK quotes + brackets
+  const NT_QUOTE_RE = /"[^"\n]{1,200}?"|'[^'\n]{1,200}?'|\u201C[^\u201D\n]{1,200}?\u201D|\u2018[^\u2019\n]{1,200}?\u2019|\u300C[^\u300D\n]{1,200}?\u300D|\u300E[^\u300F\n]{1,200}?\u300F|\u3010[^\u3011\n]{1,200}?\u3011/g;
+
+  // Walk blocks; if a block's text contains a cue, wrap each quoted segment in <span class="notrans">
+  function markNonTranslatables(root){
+    const blocks = root.querySelectorAll('p, li, td, th, dt, dd, blockquote, h1, h2, h3, h4, h5, h6');
+    blocks.forEach(block => {
+      if(!NT_CUE_RE.test(block.textContent)) return;
+      // Gather candidate text nodes within this block (skip code/pre/already-notrans)
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+        acceptNode(node){
+          if(!node.textContent) return NodeFilter.FILTER_REJECT;
+          let p = node.parentElement;
+          while(p && p !== block){
+            const tn = p.tagName;
+            if(tn === 'CODE' || tn === 'PRE' || tn === 'SCRIPT' || tn === 'STYLE') return NodeFilter.FILTER_REJECT;
+            if(p.classList){
+              if(p.classList.contains('notrans')) return NodeFilter.FILTER_REJECT;
+              if(p.classList.contains('katex')) return NodeFilter.FILTER_REJECT;
+              if(p.classList.contains('katex-display')) return NodeFilter.FILTER_REJECT;
+            }
+            p = p.parentElement;
+          }
+          // Quick early-reject: text must contain at least one quote delimiter
+          return /[\u2018\u2019\u201C\u201D\u300C\u300D\u300E\u300F\u3010\u3011"']/.test(node.textContent)
+            ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      });
+      const targets = [];
+      let n;
+      while((n = walker.nextNode())) targets.push(n);
+
+      targets.forEach(node => {
+        const text = node.textContent;
+        const frag = document.createDocumentFragment();
+        let pos = 0;
+        let m;
+        const re = new RegExp(NT_QUOTE_RE.source, 'gu');
+        let hit = false;
+        while((m = re.exec(text))){
+          hit = true;
+          if(m.index > pos){
+            frag.appendChild(document.createTextNode(text.slice(pos, m.index)));
+          }
+          const span = document.createElement('span');
+          span.className = 'notrans';
+          span.textContent = m[0];
+          frag.appendChild(span);
+          pos = m.index + m[0].length;
+        }
+        if(!hit) return;
+        if(pos < text.length){
+          frag.appendChild(document.createTextNode(text.slice(pos)));
+        }
+        node.parentNode.replaceChild(frag, node);
+      });
+    });
+  }
+
+  // Walk preview DOM, translate non-code text nodes in place
+  // cancelled() returns true → abort mid-way
+  async function translatePreview(target, cancelled){
+    // Pre-pass: protect quoted values inside blocks that describe "extracted / identified" content
+    markNonTranslatables(preview);
+
+    const skipTags = new Set(['CODE', 'PRE', 'SCRIPT', 'STYLE', 'KBD', 'SAMP']);
+    const walker = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT, {
+      acceptNode(node){
+        if(!node.textContent || !node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+        let p = node.parentElement;
+        while(p && p !== preview){
+          if(skipTags.has(p.tagName)) return NodeFilter.FILTER_REJECT;
+          if(p.classList){
+            if(p.classList.contains('notrans')) return NodeFilter.FILTER_REJECT;
+            if(p.classList.contains('katex')) return NodeFilter.FILTER_REJECT;
+            if(p.classList.contains('katex-display')) return NodeFilter.FILTER_REJECT;
+          }
+          p = p.parentElement;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const nodes = [];
+    let n;
+    while((n = walker.nextNode())) nodes.push(n);
+    if(!nodes.length) return { total: 0, done: 0 };
+
+    // Concurrency-limited translation to avoid rate-limit
+    const CONCURRENT = 5;
+    let done = 0;
+    for(let i = 0; i < nodes.length; i += CONCURRENT){
+      if(cancelled && cancelled()) return { total: nodes.length, done, cancelled: true };
+      const batch = nodes.slice(i, i + CONCURRENT);
+      await Promise.all(batch.map(async node => {
+        try {
+          node.textContent = await translateCached(node.textContent, target);
+        } catch(e){ /* keep original text on failure */ }
+        done++;
+        if(!(cancelled && cancelled())){
+          showTransStatus(`翻译中 · ${done}/${nodes.length}`, 'busy');
+        }
+      }));
+    }
+    return { total: nodes.length, done };
+  }
+
+  function showTransStatus(text, kind){
+    transStatusEl.hidden = false;
+    transStatusEl.className = 'md-trans-status' + (kind ? (' ' + kind) : '');
+    transStatusText.textContent = text;
+  }
+  function hideTransStatus(){
+    transStatusEl.hidden = true;
+  }
+
+  // Debounced translate trigger, with cancellation token
+  let transSeq = 0;
+  let transDebounceId = null;
+  function scheduleTranslate(delay){
+    clearTimeout(transDebounceId);
+    const mySeq = ++transSeq;
+    transDebounceId = setTimeout(() => runTranslate(mySeq), delay == null ? 800 : delay);
+  }
+  async function runTranslate(mySeq){
+    if(!optTrans.checked) return;
+    const target = transLang.value;
+    showTransStatus('翻译中…', 'busy');
+    try {
+      const res = await translatePreview(target, () => mySeq !== transSeq);
+      if(mySeq !== transSeq) return; // superseded
+      if(res.cancelled){ return; }
+      showTransStatus(`已翻译 ${res.done} 段 → ${target}`, 'ok');
+      setTimeout(() => { if(transSeq === mySeq) hideTransStatus(); }, 2000);
+    } catch(e){
+      if(mySeq !== transSeq) return;
+      showTransStatus('翻译失败: ' + (e.message || e), 'err');
+    }
+  }
+
+  function render(){
+    const src = input.value || '';
+    marked.setOptions({ gfm: true, breaks: optBreaks.checked });
+    try { preview.innerHTML = marked.parse(src); }
+    catch(e){ preview.innerHTML = '<p style="color:var(--danger)">渲染失败: ' + (e.message || e) + '</p>'; }
+    // LaTeX math rendering (KaTeX auto-render). Safe if script failed to load.
+    if(typeof window.renderMathInElement === 'function'){
+      try {
+        window.renderMathInElement(preview, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '$', right: '$', display: false }
+          ],
+          ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ignoredClasses: ['notrans'],
+          throwOnError: false,
+          errorColor: '#ff6b7a'
+        });
+      } catch(e){ /* ignore math render errors */ }
+    }
+    statLen.textContent = src.length + ' 字符';
+    statLine.textContent = (src ? src.split(/\r?\n/).length : 0) + ' 行';
+    statWord.textContent = countWords(src) + ' 词';
+    // Auto-trigger translation if enabled
+    if(optTrans.checked){
+      scheduleTranslate();
+    } else {
+      // Cancel any pending translation
+      transSeq++;
+      clearTimeout(transDebounceId);
+      hideTransStatus();
+    }
+  }
+  input.addEventListener('input', render);
+  optBreaks.addEventListener('change', render);
+
+  // Translation controls
+  optTrans.addEventListener('change', () => {
+    try { localStorage.setItem('md_trans_enabled', optTrans.checked ? '1' : '0'); } catch(e){}
+    if(optTrans.checked){
+      // Fresh render first (preview may currently be showing translated content)
+      render();
+      scheduleTranslate(100); // near-immediate on toggle
+    } else {
+      render(); // re-render to show original
+    }
+  });
+  transLang.addEventListener('change', () => {
+    try { localStorage.setItem('md_trans_lang', transLang.value); } catch(e){}
+    if(optTrans.checked){
+      render();
+      scheduleTranslate(100);
+    }
+  });
+
+  // Bi-directional scroll sync
+  let syncing = false;
+  function bindSync(a, b){
+    a.addEventListener('scroll', () => {
+      if(!optSync.checked || syncing) return;
+      const aMax = Math.max(1, a.scrollHeight - a.clientHeight);
+      const bMax = Math.max(0, b.scrollHeight - b.clientHeight);
+      if(aMax === 0 || bMax === 0) return;
+      syncing = true;
+      b.scrollTop = (a.scrollTop / aMax) * bMax;
+      requestAnimationFrame(() => { syncing = false; });
+    });
+  }
+  bindSync(input, preview);
+  bindSync(preview, input);
+
+  // Support Tab key in textarea (insert 2 spaces instead of switching focus)
+  input.addEventListener('keydown', e => {
+    if(e.key === 'Tab' && !e.shiftKey){
+      e.preventDefault();
+      const start = input.selectionStart, end = input.selectionEnd;
+      input.value = input.value.substring(0, start) + '  ' + input.value.substring(end);
+      input.selectionStart = input.selectionEnd = start + 2;
+      render();
+    }
+  });
+
+  // After paste, jump to top-left of content (not the end of the pasted text)
+  input.addEventListener('paste', () => {
+    // Defer to next tick so the paste has completed and value updated
+    requestAnimationFrame(() => {
+      input.scrollTop = 0;
+      input.scrollLeft = 0;
+      input.selectionStart = input.selectionEnd = 0;
+      render();
+      requestAnimationFrame(() => {
+        // Re-assert scroll after render (some browsers restore cursor scroll)
+        input.scrollTop = 0;
+        input.scrollLeft = 0;
+        preview.scrollTop = 0;
+      });
+    });
+  });
+
+  // Toolbar buttons
+  document.getElementById('mdBtnSample').addEventListener('click', () => {
+    input.value = SAMPLE_MD;
+    render();
+    input.focus();
+    input.scrollTop = 0;
+    preview.scrollTop = 0;
+  });
+  document.getElementById('mdBtnClear').addEventListener('click', () => {
+    if(input.value && !confirm('确定要清空当前内容吗？')) return;
+    input.value = '';
+    render();
+    input.focus();
+  });
+  document.getElementById('mdBtnCopyHtml').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(preview.innerHTML);
+      toast('✓ HTML 片段已复制到剪贴板');
+    } catch(e){
+      toast('复制失败: ' + e.message, 'err');
+    }
+  });
+  document.getElementById('mdBtnDownloadMd').addEventListener('click', () => {
+    if(!input.value.trim()){ toast('内容为空,无法下载', 'err'); return; }
+    download(input.value, suggestFilename('md'), 'text/markdown;charset=utf-8');
+  });
+  document.getElementById('mdBtnDownloadHtml').addEventListener('click', () => {
+    if(!input.value.trim()){ toast('内容为空,无法下载', 'err'); return; }
+    download(buildFullHtml(preview.innerHTML, input.value), suggestFilename('html'), 'text/html;charset=utf-8');
+  });
+
+  function download(text, filename, type){
+    const blob = new Blob([text], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 300);
+  }
+
+  function suggestFilename(ext){
+    // Use first H1 line of markdown, or fallback
+    const m = (input.value.match(/^#\s+(.+?)\s*$/m));
+    const base = m ? m[1].replace(/[\\/:*?"<>|]/g, '').slice(0, 40).trim() : 'markdown';
+    const ts = new Date().toISOString().slice(0, 10);
+    return `${base || 'markdown'}_${ts}.${ext}`;
+  }
+
+  function buildFullHtml(bodyHtml, mdSource){
+    const title = (mdSource.match(/^#\s+(.+?)\s*$/m) || [,'Markdown 导出'])[1];
+    return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;max-width:860px;margin:40px auto;padding:0 20px;color:#1b2030;line-height:1.75;font-size:15px}
+h1,h2,h3,h4,h5,h6{line-height:1.3;font-weight:600;margin:22px 0 10px}
+h1{font-size:26px;border-bottom:1px solid #e3e7f1;padding-bottom:8px}
+h2{font-size:20px;border-bottom:1px solid #e3e7f1;padding-bottom:6px}
+h3{font-size:17px}
+p{margin:10px 0}
+ul,ol{padding-left:28px;margin:10px 0}
+li{margin:4px 0}
+a{color:#3e63dd}
+code{background:#f1f4fb;padding:2px 7px;border-radius:4px;font-size:90%;color:#c64545;font-family:"JetBrains Mono",Consolas,Menlo,monospace}
+pre{background:#f6f7fb;border:1px solid #e3e7f1;border-radius:8px;padding:14px 16px;overflow:auto;margin:12px 0}
+pre code{background:none;padding:0;color:#1b2030}
+blockquote{border-left:3px solid #3e63dd;padding:6px 14px;color:#52607a;background:#f0f4ff;border-radius:0 6px 6px 0;margin:12px 0}
+table{border-collapse:collapse;margin:12px 0}
+th,td{border:1px solid #d1d7e5;padding:7px 12px;text-align:left;vertical-align:top}
+th{background:#eceff7}
+img{max-width:100%;border-radius:6px}
+hr{border:none;border-top:1px solid #e3e7f1;margin:16px 0}
+del{color:#8a93a8}
+</style>
+</head>
+<body>
+${bodyHtml}
+</body>
+</html>`;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function toast(msg, kind){
+    const el = document.createElement('div');
+    el.className = 'toast' + (kind === 'err' ? ' err' : '');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; }, 1500);
+    setTimeout(() => el.remove(), 1900);
+  }
+
+  const SAMPLE_MD = `# Markdown 转译示例
+
+这是一个 **Markdown 编辑器** 预览工具。左侧编辑、右侧实时渲染,所有处理都在浏览器本地完成。
+
+## 基础语法
+
+- *斜体* / **粗体** / ~~删除线~~ / \`行内代码\`
+- [超链接](https://github.com/ToGouEre/Tools)
+- 快捷键提示:<kbd>Ctrl</kbd> + <kbd>C</kbd>
+
+## 任务列表
+
+- [x] 加一个 Markdown 编辑器
+- [x] 支持实时预览 + 滚动同步
+- [ ] 加一键导出 PDF
+- [ ] 夜间主题切换
+
+## 代码块
+
+\`\`\`js
+// JavaScript 高亮(样式)
+function greet(name){
+  return \`Hello, \${name}!\`;
+}
+console.log(greet('Markdown'));
+\`\`\`
+
+## 引用
+
+> "完美不是无可再加,而是无可再减。"
+>
+> —— 圣埃克苏佩里
+
+## 表格
+
+| 功能 | 状态 | 说明 |
+|---|:---:|---|
+| 实时预览 | ✅ | 输入即渲染 |
+| 滚动同步 | ✅ | 双向联动 |
+| 导出 HTML | ✅ | 含内置样式 |
+| 导出 PDF | 🚧 | TODO |
+
+## 嵌套列表
+
+1. 第一步
+   - 先把原文写进左边
+   - 右边自动渲染
+2. 第二步
+   - 看看效果
+   - 不对的地方再改
+
+## 数学公式(LaTeX)
+
+行内公式:欧拉恒等式 $e^{i\\pi} + 1 = 0$,勾股定理 $a^2 + b^2 = c^2$。
+
+块级公式:
+
+$$\\left(u + x\\frac{du}{dx} - u\\right) \\arctan u = 1$$
+
+矩阵与求和:
+
+$$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}$$
+
+---
+
+*祝你写得开心 ✍️*
+`;
+
+  // Initial render (empty by default so user sees the placeholder;
+  // click "插入示例" to load the sample)
+  render();
+  // If KaTeX/auto-render hasn't finished loading yet (defer scripts run after
+  // this inline script), re-render once it's ready so any pre-filled math renders.
+  if(typeof window.renderMathInElement !== 'function'){
+    const reRun = () => { if(input.value && input.value.indexOf('$') !== -1) render(); };
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', reRun, { once: true });
+    } else {
+      setTimeout(reRun, 200);
+    }
+  }
+})();
 </script>
 </body>
 </html>
