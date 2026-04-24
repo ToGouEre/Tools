@@ -1019,32 +1019,186 @@ btnConvert.addEventListener('click', async ()=>{
     return ascii + cjk;
   }
 
-  // ---- Translation (Google Translate free endpoint) ----
+  // ---- Translation engines (Google primary + MyMemory fallback) + context-aware batching ----
+  //
+  // Why: Markdown like "Tak, **Twoj wynik jest absolutnie poprawny!** target"
+  // renders into three sibling text nodes. Sending each node independently to
+  // Google Translate strips the context, and a bare "Tak, " can be
+  // misidentified as English and mistranslated to "不是". We instead merge
+  // every text node in a block into a single payload with {TXn} placeholders
+  // (which MT engines preserve verbatim), translate once with full context,
+  // then redistribute the pieces back.
+
+  // --- primary engine: Google Translate free gtx endpoint ---
+  async function googleTranslate(text, target, source){
+    if(!text.trim()) return text;
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&dt=t' +
+      '&sl=' + encodeURIComponent(source || 'auto') +
+      '&tl=' + encodeURIComponent(target) +
+      '&q=' + encodeURIComponent(text);
+    const r = await fetch(url, { credentials: 'omit' });
+    if(!r.ok) throw new Error('GT HTTP ' + r.status);
+    const data = await r.json();
+    if(data && Array.isArray(data.sentences)){
+      return data.sentences.map(s => s.trans || '').join('');
+    }
+    if(Array.isArray(data) && Array.isArray(data[0])){
+      return data[0].map(seg => (seg && seg[0]) || '').join('');
+    }
+    throw new Error('GT parse failed');
+  }
+
+  // --- language detection (for fallback engines that need explicit source) ---
+  async function detectLang(text){
+    try {
+      const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&dt=ld&sl=auto&tl=en&q=' + encodeURIComponent(text);
+      const r = await fetch(url, { credentials: 'omit' });
+      if(!r.ok) return null;
+      const data = await r.json();
+      if(data && typeof data.src === 'string') return data.src;
+      if(Array.isArray(data)){
+        if(typeof data[2] === 'string' && data[2].length <= 10) return data[2];
+        const last = data[data.length - 1];
+        if(Array.isArray(last) && typeof last[0] === 'string' && last[0].length <= 10) return last[0];
+      }
+    } catch(e){}
+    return null;
+  }
+
+  // --- fallback engine: MyMemory API (no key; ~5000 chars/day/IP) ---
+  async function myMemoryTranslate(text, target, source){
+    if(!text.trim()) return text;
+    let src = source;
+    if(!src || src === 'auto'){
+      src = (await detectLang(text)) || 'en';
+    }
+    const srcTag = (src || 'en').replace('_', '-');
+    const tgtTag = target.replace('_', '-');
+    const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) +
+      '&langpair=' + encodeURIComponent(srcTag + '|' + tgtTag);
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('MyMemory HTTP ' + r.status);
+    const data = await r.json();
+    if(data && data.responseData && typeof data.responseData.translatedText === 'string'){
+      return data.responseData.translatedText;
+    }
+    throw new Error('MyMemory parse failed');
+  }
+
+  // --- caching ---
   const transCache = new Map();
-  const CACHE_MAX = 800;
+  const CACHE_MAX = 1000;
   function cacheSet(key, val){
     transCache.set(key, val);
     if(transCache.size > CACHE_MAX){
       transCache.delete(transCache.keys().next().value);
     }
   }
-  async function googleTranslate(text, target, source){
-    if(!text.trim()) return text;
-    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' +
-      encodeURIComponent(source || 'auto') + '&tl=' + encodeURIComponent(target) +
-      '&dt=t&q=' + encodeURIComponent(text);
-    const r = await fetch(url);
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const data = await r.json();
-    if(!Array.isArray(data) || !Array.isArray(data[0])) throw new Error('解析翻译结果失败');
-    return data[0].map(seg => (seg && seg[0]) || '').join('');
-  }
-  async function translateCached(text, target){
+
+  // --- single-string translation with multi-engine fallback (GT x2 -> MyMemory) ---
+  async function translateOne(text, target, source){
+    if(!text) return text;
     const key = target + '||' + text;
     if(transCache.has(key)) return transCache.get(key);
-    const t = await googleTranslate(text, target);
-    cacheSet(key, t);
-    return t;
+    let lastErr;
+    for(let attempt = 0; attempt < 2; attempt++){
+      try {
+        const out = await googleTranslate(text, target, source);
+        if(typeof out === 'string' && out.length){ cacheSet(key, out); return out; }
+      } catch(e){
+        lastErr = e;
+        await new Promise(rs => setTimeout(rs, 250 + attempt * 400));
+      }
+    }
+    try {
+      const out = await myMemoryTranslate(text, target, source);
+      if(typeof out === 'string' && out.length){ cacheSet(key, out); return out; }
+    } catch(e){ lastErr = e; }
+    throw lastErr || new Error('translate: all engines failed');
+  }
+
+  // Back-compat alias used by older callers.
+  async function translateCached(text, target){
+    return await translateOne(text, target);
+  }
+
+  // --- placeholder-based batching ---
+  // Google & MyMemory both preserve ICU-style {TXn} tokens, which lets us
+  // translate a whole block with surrounding context and then redistribute
+  // the translated pieces back into each text node.
+  function buildPlaceholderPayload(texts){
+    const markers = texts.map((_, i) => '{TX' + i + '}');
+    const payload = texts.map((t, i) => markers[i] + t).join('');
+    return { payload, markers };
+  }
+  function splitByPlaceholders(translated, n){
+    const segs = new Array(n).fill(null);
+    const re = /\{\s*TX\s*(\d+)\s*\}/g;
+    let lastIdx = -1, lastPos = 0, m;
+    while((m = re.exec(translated))){
+      const idx = parseInt(m[1], 10);
+      if(idx < 0 || idx >= n) continue;
+      if(lastIdx >= 0) segs[lastIdx] = translated.slice(lastPos, m.index);
+      lastIdx = idx;
+      lastPos = re.lastIndex;
+    }
+    if(lastIdx >= 0) segs[lastIdx] = translated.slice(lastPos);
+    return segs;
+  }
+
+  // Translate an array of texts as one contextualised batch; fall back to
+  // per-item on failure so a flaky batch never loses an entire block.
+  async function translateBatch(texts, target, source){
+    if(!texts.length) return [];
+    if(texts.length === 1){
+      try { return [await translateOne(texts[0], target, source)]; }
+      catch(e){ return [texts[0]]; }
+    }
+    const BATCH_LIMIT = 3500;
+    const approxSize = texts.reduce((a, t, i) => a + t.length + ('{TX' + i + '}').length, 0);
+    if(approxSize > BATCH_LIMIT){
+      const chunks = [];
+      let cur = [], curSize = 0, start = 0;
+      texts.forEach((t, i) => {
+        const size = ('{TX' + i + '}').length + t.length;
+        if(curSize + size > BATCH_LIMIT && cur.length){
+          chunks.push({ start, texts: cur });
+          start = i;
+          cur = [];
+          curSize = 0;
+        }
+        cur.push(t);
+        curSize += size;
+      });
+      if(cur.length) chunks.push({ start, texts: cur });
+      const out = new Array(texts.length).fill(null);
+      for(const c of chunks){
+        const translated = await translateBatch(c.texts, target, source);
+        translated.forEach((v, k) => { out[c.start + k] = v; });
+      }
+      return out;
+    }
+    const { payload } = buildPlaceholderPayload(texts);
+    try {
+      const translated = await translateOne(payload, target, source);
+      const segs = splitByPlaceholders(translated, texts.length);
+      const missing = [];
+      segs.forEach((s, i) => { if(s == null) missing.push(i); });
+      if(!missing.length) return segs;
+      // Some placeholders were swallowed by the engine; retry just those.
+      for(const i of missing){
+        try { segs[i] = await translateOne(texts[i], target, source); }
+        catch(e){ segs[i] = texts[i]; }
+      }
+      return segs;
+    } catch(e){
+      const out = [];
+      for(const t of texts){
+        try { out.push(await translateOne(t, target, source)); }
+        catch(e2){ out.push(t); }
+      }
+      return out;
+    }
   }
 
   // --- Smart-skip: mark "extracted / identified" values so they aren't translated ---
@@ -1109,51 +1263,86 @@ btnConvert.addEventListener('click', async ()=>{
     });
   }
 
-  // Walk preview DOM, translate non-code text nodes in place
-  // cancelled() returns true → abort mid-way
+  // Walk preview DOM, translate text nodes in place.
+  // Text nodes in the same block are merged into a single context-aware
+  // request (with {TXn} placeholders) so short fragments like "Tak, " no
+  // longer lose their context and get misidentified by the engine.
+  // cancelled() returns true -> abort mid-way.
   async function translatePreview(target, cancelled){
-    // Pre-pass: protect quoted values inside blocks that describe "extracted / identified" content
     markNonTranslatables(preview);
 
-    const skipTags = new Set(['CODE', 'PRE', 'SCRIPT', 'STYLE', 'KBD', 'SAMP']);
-    const walker = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT, {
-      acceptNode(node){
-        if(!node.textContent || !node.textContent.trim()) return NodeFilter.FILTER_REJECT;
-        let p = node.parentElement;
-        while(p && p !== preview){
-          if(skipTags.has(p.tagName)) return NodeFilter.FILTER_REJECT;
-          if(p.classList){
-            if(p.classList.contains('notrans')) return NodeFilter.FILTER_REJECT;
-            if(p.classList.contains('katex')) return NodeFilter.FILTER_REJECT;
-            if(p.classList.contains('katex-display')) return NodeFilter.FILTER_REJECT;
-          }
-          p = p.parentElement;
-        }
-        return NodeFilter.FILTER_ACCEPT;
+    const SKIP_TAGS = new Set(['CODE', 'PRE', 'SCRIPT', 'STYLE', 'KBD', 'SAMP']);
+    const isSkipped = (node, stopAt) => {
+      let p = node.parentElement;
+      while(p && p !== stopAt){
+        if(SKIP_TAGS.has(p.tagName)) return true;
+        if(p.classList && (
+          p.classList.contains('notrans') ||
+          p.classList.contains('katex') ||
+          p.classList.contains('katex-display')
+        )) return true;
+        p = p.parentElement;
       }
-    });
-    const nodes = [];
-    let n;
-    while((n = walker.nextNode())) nodes.push(n);
-    if(!nodes.length) return { total: 0, done: 0 };
+      return false;
+    };
 
-    // Concurrency-limited translation to avoid rate-limit
-    const CONCURRENT = 5;
+    // Pick innermost block-level containers so text inside them is
+    // translated with its full context (e.g. we pick a <li>'s contents
+    // instead of the <ul>'s flattened text).
+    const BLOCK_SELECTOR = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, dt, dd, figcaption, caption, summary';
+    let blocks = Array.from(preview.querySelectorAll(BLOCK_SELECTOR)).filter(b => {
+      let p = b.parentElement;
+      while(p && p !== preview){
+        if(p.matches && p.matches(BLOCK_SELECTOR)) return false;
+        p = p.parentElement;
+      }
+      return true;
+    });
+    if(!blocks.length) blocks = [preview];
+
+    // Collect text nodes per block.
+    const plans = [];
+    blocks.forEach(block => {
+      const nodes = [];
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+        acceptNode(node){
+          if(!node.textContent || !node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+          if(isSkipped(node, block)) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      let n;
+      while((n = walker.nextNode())) nodes.push(n);
+      if(nodes.length) plans.push({ block, nodes });
+    });
+
+    const totalNodes = plans.reduce((a, p) => a + p.nodes.length, 0);
+    if(!totalNodes) return { total: 0, done: 0 };
+
+    const BLOCK_CONCURRENCY = 4;
     let done = 0;
-    for(let i = 0; i < nodes.length; i += CONCURRENT){
-      if(cancelled && cancelled()) return { total: nodes.length, done, cancelled: true };
-      const batch = nodes.slice(i, i + CONCURRENT);
-      await Promise.all(batch.map(async node => {
+    for(let i = 0; i < plans.length; i += BLOCK_CONCURRENCY){
+      if(cancelled && cancelled()) return { total: totalNodes, done, cancelled: true };
+      const batch = plans.slice(i, i + BLOCK_CONCURRENCY);
+      await Promise.all(batch.map(async plan => {
         try {
-          node.textContent = await translateCached(node.textContent, target);
-        } catch(e){ /* keep original text on failure */ }
-        done++;
+          const texts = plan.nodes.map(n => n.textContent);
+          const translated = await translateBatch(texts, target);
+          if(cancelled && cancelled()) return;
+          plan.nodes.forEach((node, idx) => {
+            const v = translated[idx];
+            if(typeof v === 'string' && v.length){
+              node.textContent = v;
+            }
+          });
+        } catch(e){ /* keep originals */ }
+        done += plan.nodes.length;
         if(!(cancelled && cancelled())){
-          showTransStatus(`翻译中 · ${done}/${nodes.length}`, 'busy');
+          showTransStatus('翻译中 · ' + done + '/' + totalNodes, 'busy');
         }
       }));
     }
-    return { total: nodes.length, done };
+    return { total: totalNodes, done };
   }
 
   function showTransStatus(text, kind){
