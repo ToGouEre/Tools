@@ -197,6 +197,15 @@
   main.main:has(#tool-htmlrun:not([hidden])) #tool-htmlrun .page-header{margin-bottom:12px}
   main.main:has(#tool-htmlrun:not([hidden])) #tool-htmlrun .card{padding:14px 18px}
 
+  /* HTML runner: narrow centered card that hugs the editor */
+  main.main:has(#tool-htmlrun:not([hidden])) #tool-htmlrun .card.htmlrun-card{width:1136px;max-width:100%;margin:0 auto}
+  .htmlrun-editor-wrap{height:calc(100vh - 260px);min-height:520px}
+  .htmlrun-input{width:100%;height:100%;font-family:"JetBrains Mono","Fira Code",Consolas,Menlo,monospace;font-size:13.5px;line-height:1.6;padding:18px 22px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre;transition:border-color .15s ease}
+  .htmlrun-input:focus{border-color:var(--accent)}
+  @media (max-width: 980px){
+    .htmlrun-editor-wrap{height:auto;min-height:420px}
+  }
+
   /* Pin viewport while the Markdown tool is active. The textarea + preview
      both have `overflow:auto` and a bounded height, but Chromium still
      inflates `document.documentElement.scrollHeight` based on a descendant
@@ -469,21 +478,17 @@
       <div class="page-header">
         <div>
           <h1 class="page-title">HTML 在线运行</h1>
-          <div class="page-sub">输入 HTML/CSS/JS，右侧实时预览，也可在新标签页运行查看。</div>
+          <div class="page-sub">在下方输入 HTML / CSS / JS，点击运行会在新标签页里打开。</div>
         </div>
         <div class="header-right">
           <span class="badge dot">纯前端</span>
         </div>
       </div>
-      <div class="card">
+      <div class="card htmlrun-card">
         <div class="md-toolbar">
           <button class="btn primary" id="htmlBtnRun">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             运行（新窗口）
-          </button>
-          <button class="btn" id="htmlBtnPreview">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-            刷新预览
           </button>
           <button class="btn" id="htmlBtnSample">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
@@ -493,11 +498,8 @@
           <div class="spacer"></div>
           <span id="htmlStatLen" class="badge">0 字符</span>
         </div>
-        <div class="md-split">
-          <textarea id="htmlInput" class="md-input" spellcheck="false" placeholder="在这里输入 HTML 代码 …"></textarea>
-          <div class="md-preview" style="padding:0;overflow:hidden;position:relative">
-            <iframe id="htmlPreview" style="width:100%;height:100%;border:none;display:block;background:#fff" sandbox="allow-scripts allow-same-origin allow-modals allow-popups" title="预览"></iframe>
-          </div>
+        <div class="htmlrun-editor-wrap">
+          <textarea id="htmlInput" class="md-input htmlrun-input" spellcheck="false" placeholder="在这里输入 HTML 代码 …  （Ctrl/Cmd + Enter 运行）"></textarea>
         </div>
       </div>
     </section>
@@ -1728,13 +1730,11 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
 // ====== HTML 在线运行 ======
 (function(){
   const input = document.getElementById('htmlInput');
-  const frame = document.getElementById('htmlPreview');
   const btnRun = document.getElementById('htmlBtnRun');
-  const btnPreview = document.getElementById('htmlBtnPreview');
   const btnSample = document.getElementById('htmlBtnSample');
   const btnClear = document.getElementById('htmlBtnClear');
   const statLen = document.getElementById('htmlStatLen');
-  if(!input || !frame) return;
+  if(!input) return;
 
   const SAMPLE_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1779,19 +1779,6 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
 </body>
 </html>`;
 
-  const EMPTY_HTML = `<!DOCTYPE html><html><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:#9aa0a6;background:#fafbfc"><div style="text-align:center"><div style="font-size:38px;margin-bottom:8px">📝</div><div>输入 HTML 代码后点击"刷新预览"或"运行（新窗口）"</div></div></body></html>`;
-
-  // Live preview via srcdoc (debounced)
-  let debounceTimer = 0;
-  function renderPreview(immediate){
-    clearTimeout(debounceTimer);
-    const fire = () => {
-      const code = input.value;
-      frame.srcdoc = code.trim() ? code : EMPTY_HTML;
-    };
-    if(immediate) fire(); else debounceTimer = setTimeout(fire, 400);
-  }
-
   function openInNewWindow(){
     const code = input.value.trim();
     if(!code){ updateStatus('代码为空', true); return; }
@@ -1816,19 +1803,16 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   }
 
   // Wire up
-  input.addEventListener('input', () => { updateStatus(); renderPreview(false); });
+  input.addEventListener('input', () => updateStatus());
   btnRun.addEventListener('click', openInNewWindow);
-  btnPreview.addEventListener('click', () => renderPreview(true));
   btnSample.addEventListener('click', () => {
     input.value = SAMPLE_HTML;
     updateStatus();
-    renderPreview(true);
     input.focus();
   });
   btnClear.addEventListener('click', () => {
     input.value = '';
     updateStatus();
-    renderPreview(true);
     input.focus();
   });
 
@@ -1842,7 +1826,6 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
 
   // Init
   updateStatus();
-  renderPreview(true);
 })();
 </script>
 </body>
