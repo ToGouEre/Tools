@@ -192,6 +192,16 @@
   main.main:has(#tool-markdown:not([hidden])) #tool-markdown .page-header{margin-bottom:12px}
   main.main:has(#tool-markdown:not([hidden])) #tool-markdown .card{padding:14px 18px}
 
+  /* Pin viewport while the Markdown tool is active. The textarea + preview
+     both have `overflow:auto` and a bounded height, but Chromium still
+     inflates `document.documentElement.scrollHeight` based on a descendant
+     overflow container's own `scrollHeight`, which creates a tall blank
+     region below the page. Fixing body to the viewport eliminates the
+     phantom scroll region entirely without affecting the left/right pane
+     internal scrolling. */
+  html.md-tool-active{height:100vh;overflow:hidden}
+  body.md-tool-active{position:fixed;inset:0;overflow:hidden}
+
   .md-preview{padding:14px 22px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:auto;color:var(--text);font-size:14px;line-height:1.75}
   .md-preview > *:first-child{margin-top:0}
   .md-preview > *:last-child{margin-bottom:0}
@@ -976,6 +986,13 @@ btnConvert.addEventListener('click', async ()=>{
       n.classList.toggle('active', n.dataset.tool === tool);
     });
     sections.forEach(s => { s.hidden = s.id !== 'tool-' + tool; });
+    // Markdown tool needs the page pinned to the viewport (see CSS note
+    // near `.md-tool-active`). Reset scroll before toggling so a leftover
+    // scroll position from another tool doesn't leak in.
+    const md = tool === 'markdown';
+    if(md){ window.scrollTo(0, 0); }
+    document.documentElement.classList.toggle('md-tool-active', md);
+    document.body.classList.toggle('md-tool-active', md);
   }
   navs.forEach(n => {
     n.addEventListener('click', () => {
