@@ -9,7 +9,6 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.105.0/dist/mathlive.min.js" crossorigin="anonymous"></script>
 <style>
   :root{
     --bg:#0b0d12; --bg-2:#12151d; --panel:#161a24; --panel-2:#1d2230;
@@ -211,7 +210,6 @@
   .ltxe-sym-btn:hover{border-color:var(--accent);background:rgba(124,156,255,.08)}
   .ltxe-sym-btn .sym-lbl{font-size:11px;color:var(--text-dim);pointer-events:none}
   .ltxe-split{display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"input preview";gap:12px;height:calc(100vh - 440px);min-height:360px;transition:grid-template-areas .25s ease}
-  .ltxe-split.swapped{grid-template-areas:"preview input"}
   .ltxe-input-area{grid-area:input;display:flex;flex-direction:column;gap:6px}
   .ltxe-preview-area{grid-area:preview;display:flex;flex-direction:column;gap:6px}
   .ltxe-panel-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
@@ -224,7 +222,6 @@
   .ltxe-output{background:var(--bg);color:var(--text-dim);cursor:text}
   @media (max-width:900px){
     .ltxe-split{grid-template-columns:1fr;grid-template-areas:"input" "preview";height:auto;min-height:300px}
-    .ltxe-split.swapped{grid-template-areas:"preview" "input"}
     .ltxe-split .ltxe-input-area,.ltxe-split .ltxe-preview-area{height:300px}
     .ltxe-mathfield{min-height:300px}
   }
@@ -1967,18 +1964,35 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   const symContainer = document.getElementById('ltxeSymbols');
   const labelLeft = document.getElementById('ltxeLabelLeft');
   const labelRight = document.getElementById('ltxeLabelRight');
-  let mf = null;     // dynamically created math-field
-  let output = null; // dynamically created output textarea
   if(!input) return;
+
+  // ---- MathLive lazy loader ----
+  let mathliveReady = false;
+  function loadMathLive(){
+    return new Promise((resolve, reject) => {
+      if(typeof window.MathfieldElement !== 'undefined'){
+        mathliveReady = true; resolve(); return;
+      }
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/mathlive@0.105.0/dist/mathlive.min.js';
+      s.onload = () => { mathliveReady = true; resolve(); };
+      s.onerror = () => reject(new Error('MathLive CDN 加载失败'));
+      document.head.appendChild(s);
+    });
+  }
+
+  let mf = null;
+  let output = null;
 
   function ensureMathField(){
     if(mf) return mf;
+    if(!mathliveReady) return null;
     mf = document.createElement('math-field');
     mf.className = 'ltxe-mathfield';
     mf.setAttribute('placeholder', '在这里编辑公式 …');
     input.parentNode.appendChild(mf);
     mf.addEventListener('input', () => {
-      if(output) output.value = mf.value;
+      if(output) output.value = mf.getValue('latex');
       updateStat();
     });
     return mf;
@@ -1994,31 +2008,80 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
     return output;
   }
 
+  let mode = 'A'; // 'A'=latex→render, 'B'=wysiwyg→latex
+
   function setModeA(){
+    mode = 'A';
     if(mf) mf.style.display = 'none';
     input.style.display = '';
     if(output) output.style.display = 'none';
     preview.style.display = '';
     labelLeft.textContent = 'LaTeX 源码';
     labelRight.textContent = '渲染预览';
-    if(mf) input.value = mf.value || input.value;
+    if(mf) input.value = mf.getValue('latex') || input.value;
     renderPreview();
     updateStat();
+    input.focus();
   }
 
   function setModeB(){
-    const m = ensureMathField();
-    const o = ensureOutput();
-    input.style.display = 'none';
-    m.style.display = '';
-    preview.style.display = 'none';
-    o.style.display = '';
-    labelLeft.textContent = '公式编辑';
-    labelRight.textContent = 'LaTeX 源码';
-    m.value = input.value;
-    o.value = input.value;
-    updateStat();
+    loadMathLive().then(() => {
+      const m = ensureMathField();
+      if(!m){
+        statLen.textContent = 'MathLive 加载失败，请检查网络';
+        setTimeout(updateStat, 2000);
+        return;
+      }
+      mode = 'B';
+      const o = ensureOutput();
+      input.style.display = 'none';
+      m.style.display = '';
+      preview.style.display = 'none';
+      o.style.display = '';
+      labelLeft.textContent = '公式编辑';
+      labelRight.textContent = 'LaTeX 源码';
+      m.setValue(input.value, {format:'latex'});
+      o.value = input.value;
+      updateStat();
+      m.focus();
+    }).catch(err => {
+      statLen.textContent = '公式编辑器加载失败: ' + err.message;
+      setTimeout(updateStat, 3000);
+    });
   }
+
+  btnSwap.addEventListener('click', () => {
+    if(mode === 'A') setModeB();
+    else setModeA();
+  });
+
+  btnClear.addEventListener('click', () => {
+    if(mode === 'B' && mf){
+      mf.setValue('', {format:'latex'});
+      if(output) output.value = '';
+    } else {
+      input.value = '';
+      renderPreview();
+    }
+    updateStat();
+    (mode === 'B' && mf ? mf : input).focus();
+  });
+
+  btnCopy.addEventListener('click', async () => {
+    const code = (mode === 'B' && mf) ? (mf.getValue('latex') || '') : input.value;
+    if(!code){ statLen.textContent = '无内容可复制'; setTimeout(updateStat, 1500); return; }
+    try {
+      await navigator.clipboard.writeText(code);
+      statLen.textContent = '已复制到剪贴板';
+      setTimeout(updateStat, 1500);
+    } catch(e){
+      const el = (mode === 'B' && output) ? output : input;
+      el.select(); document.execCommand('copy');
+      statLen.textContent = '已复制';
+      setTimeout(updateStat, 1500);
+    }
+    (mode === 'B' && mf ? mf : input).focus();
+  });
 
   const SYMBOLS = [
     {cat:'常用符号', items:[
@@ -2104,7 +2167,6 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   ];
 
   let activeCat = 0;
-  let swapped = false;
 
   function buildCats(){
     catContainer.innerHTML = '';
@@ -2132,10 +2194,11 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   }
 
   function insertAtCursor(text){
-    if(swapped){
+    if(mode === 'B'){
       const m = ensureMathField();
-      if(m && m.insert) m.insert(text, {format:'latex'});
-      if(output) output.value = m ? m.value : '';
+      if(!m){ statLen.textContent = '编辑器未就绪'; setTimeout(updateStat, 1500); return; }
+      m.executeCommand(['insert', text, {focus:true, format:'latex'}]);
+      if(output) output.value = m.getValue('latex');
       updateStat();
       return;
     }
@@ -2173,43 +2236,9 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   }
 
   function updateStat(){
-    const src = swapped ? (mf ? mf.value : '') : input.value;
+    const src = (mode === 'B' && mf) ? (mf.getValue('latex') || '') : input.value;
     statLen.textContent = src.length.toLocaleString() + ' 字符';
   }
-
-  btnSwap.addEventListener('click', () => {
-    swapped = !swapped;
-    split.classList.toggle('swapped', swapped);
-    if(swapped) setModeB(); else setModeA();
-  });
-
-  btnClear.addEventListener('click', () => {
-    if(swapped){
-      if(mf) mf.value = '';
-      if(output) output.value = '';
-    } else {
-      input.value = '';
-      renderPreview();
-    }
-    updateStat();
-    if(!swapped) input.focus();
-  });
-
-  btnCopy.addEventListener('click', async () => {
-    const code = swapped ? (mf ? mf.value : '') : input.value;
-    if(!code){ statLen.textContent = '无内容可复制'; setTimeout(updateStat, 1500); return; }
-    try {
-      await navigator.clipboard.writeText(code);
-      statLen.textContent = '已复制到剪贴板';
-      setTimeout(updateStat, 1500);
-    } catch(e){
-      const el = swapped ? (output || input) : input;
-      el.select(); document.execCommand('copy');
-      statLen.textContent = '已复制';
-      setTimeout(updateStat, 1500);
-    }
-    if(!swapped) input.focus();
-  });
 
   let debounce;
   input.addEventListener('input', () => {
