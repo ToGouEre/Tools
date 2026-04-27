@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.105.0/dist/mathlive.min.js" crossorigin="anonymous"></script>
 <style>
   :root{
     --bg:#0b0d12; --bg-2:#12151d; --panel:#161a24; --panel-2:#1d2230;
@@ -218,10 +219,14 @@
   .ltxe-input:focus{border-color:var(--accent)}
   .ltxe-preview{width:100%;flex:1;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;overflow:auto;padding:14px 16px;display:flex;align-items:center;justify-content:center}
   .ltxe-preview .katex{font-size:1.15em}
+  .ltxe-mathfield{width:100%;flex:1;border-radius:var(--radius-sm);border:1px solid var(--border);font-size:16px;background:#fff;--keyboard-zindex:1000}
+  .ltxe-mathfield::part(virtual-keyboard-toggle){display:none}
+  #ltxeOutput{background:var(--bg);color:var(--text-dim);cursor:text}
   @media (max-width:900px){
     .ltxe-split{grid-template-columns:1fr;grid-template-areas:"input" "preview";height:auto;min-height:300px}
     .ltxe-split.swapped{grid-template-areas:"preview" "input"}
     .ltxe-split .ltxe-input-area,.ltxe-split .ltxe-preview-area{height:300px}
+    .ltxe-mathfield{min-height:300px}
   }
   .htmlrun-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:calc(100vh - 260px);min-height:520px;transition:all .25s ease}
   .htmlrun-split.collapsed{grid-template-columns:1fr}
@@ -577,10 +582,12 @@
           <div class="ltxe-input-area">
             <div class="ltxe-panel-label" id="ltxeLabelLeft">LaTeX 源码</div>
             <textarea id="ltxeInput" class="ltxe-input" spellcheck="false" placeholder="在这里输入 LaTeX 公式 …"></textarea>
+            <math-field id="ltxeMathField" class="ltxe-mathfield" style="display:none" placeholder="在这里编辑公式 …"></math-field>
           </div>
           <div class="ltxe-preview-area">
             <div class="ltxe-panel-label" id="ltxeLabelRight">渲染预览</div>
             <div id="ltxePreview" class="ltxe-preview"></div>
+            <textarea id="ltxeOutput" class="ltxe-input" style="display:none" readonly placeholder="LaTeX 输出 …"></textarea>
           </div>
         </div>
       </div>
@@ -1962,6 +1969,8 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   const symContainer = document.getElementById('ltxeSymbols');
   const labelLeft = document.getElementById('ltxeLabelLeft');
   const labelRight = document.getElementById('ltxeLabelRight');
+  const mf = document.getElementById('ltxeMathField');
+  const output = document.getElementById('ltxeOutput');
   if(!input) return;
 
   const SYMBOLS = [
@@ -2050,6 +2059,42 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   let activeCat = 0;
   let swapped = false;
 
+  // Wait for MathLive to load (deferred script)
+  function waitMathlive(cb){
+    if(typeof MathfieldElement !== 'undefined') return cb();
+    let tries = 0;
+    const iv = setInterval(() => {
+      if(typeof MathfieldElement !== 'undefined'){ clearInterval(iv); cb(); }
+      else if(++tries > 50){ clearInterval(iv); }
+    }, 200);
+  }
+
+  function setModeA(){
+    // Mode A: left=LaTeX textarea → right=KaTeX render
+    input.style.display = '';
+    mf.style.display = 'none';
+    preview.style.display = '';
+    output.style.display = 'none';
+    labelLeft.textContent = 'LaTeX 源码';
+    labelRight.textContent = '渲染预览';
+    input.value = mf.value || '';
+    renderPreview();
+    updateStat();
+  }
+
+  function setModeB(){
+    // Mode B: left=MathLive editor → right=LaTeX output
+    input.style.display = 'none';
+    mf.style.display = '';
+    preview.style.display = 'none';
+    output.style.display = '';
+    labelLeft.textContent = '公式编辑';
+    labelRight.textContent = 'LaTeX 源码';
+    mf.value = input.value;
+    output.value = input.value;
+    updateStat();
+  }
+
   function buildCats(){
     catContainer.innerHTML = '';
     SYMBOLS.forEach((g,i)=>{
@@ -2076,6 +2121,15 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   }
 
   function insertAtCursor(text){
+    if(swapped){
+      // Insert into MathLive
+      if(typeof mf !== 'undefined' && mf.insert){
+        mf.insert(text, {format:'latex'});
+      }
+      output.value = mf.value;
+      updateStat();
+      return;
+    }
     const el = input;
     const start = el.selectionStart;
     const end = el.selectionEnd;
@@ -2110,42 +2164,42 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   }
 
   function updateStat(){
-    statLen.textContent = input.value.length.toLocaleString() + ' 字符';
+    const src = swapped ? (mf.value || '') : input.value;
+    statLen.textContent = src.length.toLocaleString() + ' 字符';
   }
 
   btnSwap.addEventListener('click', () => {
     swapped = !swapped;
     split.classList.toggle('swapped', swapped);
-    if(swapped){
-      labelLeft.textContent = '渲染预览';
-      labelRight.textContent = 'LaTeX 源码';
-    } else {
-      labelLeft.textContent = 'LaTeX 源码';
-      labelRight.textContent = '渲染预览';
-    }
+    if(swapped) setModeB(); else setModeA();
   });
 
   btnClear.addEventListener('click', () => {
-    input.value = '';
+    if(swapped){
+      mf.value = '';
+      output.value = '';
+    } else {
+      input.value = '';
+      renderPreview();
+    }
     updateStat();
-    renderPreview();
-    input.focus();
+    (swapped ? mf : input).focus();
   });
 
   btnCopy.addEventListener('click', async () => {
-    const code = input.value;
+    const code = swapped ? (mf.value || '') : input.value;
     if(!code){ statLen.textContent = '无内容可复制'; setTimeout(updateStat, 1500); return; }
     try {
       await navigator.clipboard.writeText(code);
       statLen.textContent = '已复制到剪贴板';
       setTimeout(updateStat, 1500);
     } catch(e){
-      input.select();
-      document.execCommand('copy');
+      const el = swapped ? output : input;
+      el.select(); document.execCommand('copy');
       statLen.textContent = '已复制';
       setTimeout(updateStat, 1500);
     }
-    input.focus();
+    (swapped ? mf : input).focus();
   });
 
   let debounce;
@@ -2155,7 +2209,13 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
     debounce = setTimeout(renderPreview, 200);
   });
 
-  // Wait for KaTeX (deferred script)
+  // MathLive change → update right-side LaTeX output
+  mf.addEventListener('input', () => {
+    output.value = mf.value;
+    updateStat();
+  });
+
+  // Wait for KaTeX then init preview
   function waitKatex(cb){
     if(typeof katex !== 'undefined') return cb();
     let tries = 0;
@@ -2169,6 +2229,10 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   buildSymbols();
   updateStat();
   waitKatex(renderPreview);
+  waitMathlive(() => {
+    // MathLive is ready; if user had typed before it loaded, sync
+    if(input.value) output.value = input.value;
+  });
 })();
 </script>
 </body>
