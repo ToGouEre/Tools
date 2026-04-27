@@ -156,26 +156,28 @@
   }
 
   /* ===== Markdown 转译 ===== */
-  .ltxe-palette{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .ltxe-palette{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;flex-shrink:0}
   .ltxe-palette .cat-card{flex:1 1 90px;min-width:80px;max-width:120px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2);padding:10px 6px;text-align:center;cursor:pointer;transition:all .15s ease}
   .ltxe-palette .cat-card:hover{border-color:var(--accent);background:rgba(124,156,255,.08)}
   .ltxe-palette .cat-card.active{border-color:var(--accent);background:rgba(124,156,255,.12)}
   .ltxe-palette .cat-card .cat-ico{font-size:20px;line-height:1.2;margin-bottom:4px;color:var(--text)}
   .ltxe-palette .cat-card .cat-name{font-size:11px;color:var(--text-dim)}
-  .ltxe-symbols{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;margin-bottom:14px;max-height:220px;overflow-y:auto;padding:2px}
+  .ltxe-symbols{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;margin-bottom:10px;max-height:180px;overflow-y:auto;padding:2px;flex-shrink:0}
   .ltxe-symbols .sym-btn{display:flex;align-items:center;justify-content:center;height:38px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);cursor:pointer;font-size:15px;transition:all .15s ease}
   .ltxe-symbols .sym-btn:hover{border-color:var(--accent);background:rgba(124,156,255,.08)}
-  .ltxe-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
-  .ltxe-workspace{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:calc(100vh - 420px);min-height:320px}
-  .ltxe-box{display:flex;flex-direction:column;gap:6px}
-  .ltxe-box-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+  .ltxe-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;flex-shrink:0}
+  .ltxe-workspace{display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:0;flex:1}
+  .ltxe-box{display:flex;flex-direction:column;gap:6px;min-height:0}
+  .ltxe-box-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
   .ltxe-box-area{flex:1;font-family:"JetBrains Mono","Fira Code",Consolas,monospace;font-size:14px;line-height:1.6;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre;transition:border-color .15s ease}
   .ltxe-box-area:focus{border-color:var(--accent)}
   .ltxe-box-render{flex:1;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;overflow:auto;padding:14px 16px;display:flex;align-items:center;justify-content:center}
   .ltxe-box-render .katex{font-size:1.15em}
+  #tool-latexequ .card{display:flex;flex-direction:column;padding:14px 18px;height:calc(100vh - 100px)}
   @media (max-width:900px){
-    .ltxe-workspace{grid-template-columns:1fr;height:auto;min-height:280px}
-    .ltxe-workspace .ltxe-box{height:280px}
+    .ltxe-workspace{grid-template-columns:1fr;min-height:0}
+    .ltxe-workspace .ltxe-box{min-height:240px}
+    #tool-latexequ .card{height:auto;min-height:500px}
   }
 
   .md-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
@@ -1115,12 +1117,12 @@ btnConvert.addEventListener('click', async ()=>{
     // the page pinned to the viewport — see CSS note near `.md-tool-active`.
     // Reset scroll before toggling so a leftover scroll position from
     // another tool doesn't leak in.
-    const pin = tool === 'markdown' || tool === 'htmlrun';
+    const pin = tool === 'markdown' || tool === 'htmlrun' || tool === 'latexequ';
     if(pin){ window.scrollTo(0, 0); }
     document.documentElement.classList.toggle('md-tool-active', pin);
     document.body.classList.toggle('md-tool-active', pin);
     const main = document.querySelector('main.main');
-    if(main) main.classList.toggle('htmlrun-active', tool === 'htmlrun');
+    if(main) main.classList.toggle('htmlrun-active', tool === 'htmlrun' || tool === 'latexequ');
   }
   navs.forEach(n => {
     n.addEventListener('click', () => {
