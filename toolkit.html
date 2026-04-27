@@ -197,13 +197,22 @@
   main.main:has(#tool-htmlrun:not([hidden])) #tool-htmlrun .page-header{margin-bottom:12px}
   main.main:has(#tool-htmlrun:not([hidden])) #tool-htmlrun .card{padding:14px 18px}
 
-  /* HTML runner: narrow centered card that hugs the editor */
-  main.main:has(#tool-htmlrun:not([hidden])) #tool-htmlrun .card.htmlrun-card{width:1136px;max-width:100%;margin:0 auto}
-  .htmlrun-editor-wrap{height:calc(100vh - 260px);min-height:520px}
+  /* HTML runner: split layout — input left, preview right */
+  main.main:has(#tool-htmlrun:not([hidden])) #tool-htmlrun .card.htmlrun-card{width:100%;max-width:none;margin:0}
+  .htmlrun-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:calc(100vh - 260px);min-height:520px;transition:all .25s ease}
+  .htmlrun-split.collapsed{grid-template-columns:1fr;max-width:960px;margin:0 auto}
+  .htmlrun-split.collapsed .htmlrun-preview{display:none}
   .htmlrun-input{width:100%;height:100%;font-family:"JetBrains Mono","Fira Code",Consolas,Menlo,monospace;font-size:13.5px;line-height:1.6;padding:18px 22px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre;transition:border-color .15s ease}
   .htmlrun-input:focus{border-color:var(--accent)}
+  .htmlrun-preview{width:100%;height:100%;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;overflow:auto}
+  .htmlrun-toggle-preview{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:1px solid var(--border-2);background:var(--panel-2);color:var(--text);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s ease}
+  .htmlrun-toggle-preview:hover{border-color:var(--accent);color:var(--accent)}
+  .htmlrun-toggle-preview.active{background:rgba(124,156,255,.12);border-color:rgba(124,156,255,.35);color:var(--accent)}
   @media (max-width: 980px){
-    .htmlrun-editor-wrap{height:auto;min-height:420px}
+    .htmlrun-split{grid-template-columns:1fr;height:auto;min-height:420px}
+    .htmlrun-split.collapsed{grid-template-columns:1fr;max-width:none;margin:0}
+    .htmlrun-preview{display:none}
+    .htmlrun-split.collapsed .htmlrun-preview{display:none}
   }
 
   /* Pin viewport while the Markdown tool is active. The textarea + preview
@@ -495,11 +504,16 @@
             插入示例
           </button>
           <button class="btn ghost" id="htmlBtnClear">清空</button>
+          <button class="htmlrun-toggle-preview active" id="htmlBtnTogglePreview" title="切换实时预览">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            预览
+          </button>
           <div class="spacer"></div>
           <span id="htmlStatLen" class="badge">0 字符</span>
         </div>
-        <div class="htmlrun-editor-wrap">
+        <div class="htmlrun-split" id="htmlrunSplit">
           <textarea id="htmlInput" class="md-input htmlrun-input" spellcheck="false" placeholder="在这里输入 HTML 代码 …  （Ctrl/Cmd + Enter 运行）"></textarea>
+          <iframe id="htmlPreview" class="htmlrun-preview" sandbox="allow-scripts allow-same-origin allow-popups allow-modals allow-forms" title="HTML 预览"></iframe>
         </div>
       </div>
     </section>
@@ -1734,7 +1748,38 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   const btnSample = document.getElementById('htmlBtnSample');
   const btnClear = document.getElementById('htmlBtnClear');
   const statLen = document.getElementById('htmlStatLen');
+  const preview = document.getElementById('htmlPreview');
+  const btnToggle = document.getElementById('htmlBtnTogglePreview');
+  const split = document.getElementById('htmlrunSplit');
   if(!input) return;
+
+  // Live preview into iframe
+  function updatePreview(){
+    if(!preview || split.classList.contains('collapsed')) return;
+    const code = input.value || '';
+    const doc = preview.contentDocument || preview.contentWindow.document;
+    doc.open();
+    doc.write(code);
+    doc.close();
+  }
+
+  // Toggle preview panel
+  let previewOn = true;
+  try { previewOn = localStorage.getItem('htmlrun_preview') !== '0'; } catch(e){}
+  function applyPreviewState(){
+    split.classList.toggle('collapsed', !previewOn);
+    btnToggle.classList.toggle('active', previewOn);
+    if(previewOn) updatePreview();
+  }
+  applyPreviewState();
+
+  btnToggle.addEventListener('click', () => {
+    previewOn = !previewOn;
+    try { localStorage.setItem('htmlrun_preview', previewOn ? '1' : '0'); } catch(e){}
+    applyPreviewState();
+  });
+
+  let previewDebounce;
 
   const SAMPLE_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1803,17 +1848,23 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   }
 
   // Wire up
-  input.addEventListener('input', () => updateStatus());
+  input.addEventListener('input', () => {
+    updateStatus();
+    clearTimeout(previewDebounce);
+    previewDebounce = setTimeout(updatePreview, 300);
+  });
   btnRun.addEventListener('click', openInNewWindow);
   btnSample.addEventListener('click', () => {
     input.value = SAMPLE_HTML;
     updateStatus();
     input.focus();
+    updatePreview();
   });
   btnClear.addEventListener('click', () => {
     input.value = '';
     updateStatus();
     input.focus();
+    updatePreview();
   });
 
   // Keyboard: Ctrl/Cmd+Enter → run in new window
