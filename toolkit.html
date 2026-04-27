@@ -199,6 +199,30 @@
 
   /* HTML runner: split layout — input left, preview right */
   main.main.htmlrun-active #tool-htmlrun .card.htmlrun-card{width:100%;max-width:none;margin:0}
+
+  /* ====== LaTeX 公式编辑器 ====== */
+  .ltxe-cats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .ltxe-cat-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text-dim);cursor:pointer;font-size:12px;transition:all .15s ease}
+  .ltxe-cat-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .ltxe-cat-btn.active{background:rgba(124,156,255,.12);border-color:rgba(124,156,255,.35);color:var(--accent)}
+  .ltxe-symbols{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;margin-bottom:14px;max-height:200px;overflow-y:auto;padding:2px}
+  .ltxe-sym-btn{display:flex;align-items:center;justify-content:center;height:40px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);cursor:pointer;font-size:16px;transition:all .15s ease}
+  .ltxe-sym-btn:hover{border-color:var(--accent);background:rgba(124,156,255,.08)}
+  .ltxe-sym-btn .sym-lbl{font-size:11px;color:var(--text-dim);pointer-events:none}
+  .ltxe-split{display:grid;grid-template-columns:1fr 1fr;grid-template-areas:"input preview";gap:12px;height:calc(100vh - 440px);min-height:360px;transition:grid-template-areas .25s ease}
+  .ltxe-split.swapped{grid-template-areas:"preview input"}
+  .ltxe-input-area{grid-area:input;display:flex;flex-direction:column;gap:6px}
+  .ltxe-preview-area{grid-area:preview;display:flex;flex-direction:column;gap:6px}
+  .ltxe-panel-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+  .ltxe-input{width:100%;flex:1;font-family:"JetBrains Mono","Fira Code",Consolas,monospace;font-size:14px;line-height:1.6;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre;transition:border-color .15s ease}
+  .ltxe-input:focus{border-color:var(--accent)}
+  .ltxe-preview{width:100%;flex:1;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;overflow:auto;padding:14px 16px;display:flex;align-items:center;justify-content:center}
+  .ltxe-preview .katex{font-size:1.15em}
+  @media (max-width:900px){
+    .ltxe-split{grid-template-columns:1fr;grid-template-areas:"input" "preview";height:auto;min-height:300px}
+    .ltxe-split.swapped{grid-template-areas:"preview" "input"}
+    .ltxe-split .ltxe-input-area,.ltxe-split .ltxe-preview-area{height:300px}
+  }
   .htmlrun-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:calc(100vh - 260px);min-height:520px;transition:all .25s ease}
   .htmlrun-split.collapsed{grid-template-columns:1fr}
   .htmlrun-split.collapsed .htmlrun-preview{display:none}
@@ -285,6 +309,10 @@
     <div class="nav-item" data-tool="htmlrun">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
       <span>HTML 在线运行</span>
+    </div>
+    <div class="nav-item" data-tool="latexequ">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+      <span>LaTeX 公式</span>
     </div>
     <div class="nav-item disabled" title="敬请期待">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
@@ -514,6 +542,46 @@
         <div class="htmlrun-split" id="htmlrunSplit">
           <textarea id="htmlInput" class="md-input htmlrun-input" spellcheck="false" placeholder="在这里输入 HTML 代码 …  （Ctrl/Cmd + Enter 运行）"></textarea>
           <iframe id="htmlPreview" class="htmlrun-preview" sandbox="allow-scripts allow-same-origin allow-popups allow-modals allow-forms" title="HTML 预览"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== LaTeX Equation Editor ====== -->
+    <section id="tool-latexequ" hidden>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">LaTeX 公式编辑器</h1>
+          <div class="page-sub">上方点选符号插入，下方实时预览；支持左右布局互换。</div>
+        </div>
+        <div class="header-right">
+          <span class="badge dot">纯前端 · KaTeX</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="md-toolbar">
+          <button class="btn" id="ltxeBtnSwap">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+            互换方向
+          </button>
+          <button class="btn ghost" id="ltxeBtnClear">清空</button>
+          <button class="btn" id="ltxeBtnCopy">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            复制 LaTeX
+          </button>
+          <div class="spacer"></div>
+          <span id="ltxeStatLen" class="badge">0 字符</span>
+        </div>
+        <div class="ltxe-cats" id="ltxeCats"></div>
+        <div class="ltxe-symbols" id="ltxeSymbols"></div>
+        <div class="ltxe-split" id="ltxeSplit">
+          <div class="ltxe-input-area">
+            <div class="ltxe-panel-label" id="ltxeLabelLeft">LaTeX 源码</div>
+            <textarea id="ltxeInput" class="ltxe-input" spellcheck="false" placeholder="在这里输入 LaTeX 公式 …"></textarea>
+          </div>
+          <div class="ltxe-preview-area">
+            <div class="ltxe-panel-label" id="ltxeLabelRight">渲染预览</div>
+            <div id="ltxePreview" class="ltxe-preview"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -1879,6 +1947,228 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
 
   // Init
   updateStatus();
+})();
+
+// ====== LaTeX 公式编辑器 ======
+(function(){
+  const input = document.getElementById('ltxeInput');
+  const preview = document.getElementById('ltxePreview');
+  const split = document.getElementById('ltxeSplit');
+  const btnSwap = document.getElementById('ltxeBtnSwap');
+  const btnClear = document.getElementById('ltxeBtnClear');
+  const btnCopy = document.getElementById('ltxeBtnCopy');
+  const statLen = document.getElementById('ltxeStatLen');
+  const catContainer = document.getElementById('ltxeCats');
+  const symContainer = document.getElementById('ltxeSymbols');
+  const labelLeft = document.getElementById('ltxeLabelLeft');
+  const labelRight = document.getElementById('ltxeLabelRight');
+  if(!input) return;
+
+  const SYMBOLS = [
+    {cat:'常用符号', items:[
+      {t:'+',v:'+'},{t:'−',v:'-'},{t:'×',v:'\\times'},{t:'÷',v:'\\div'},
+      {t:'=',v:'='},{t:'≠',v:'\\neq'},{t:'≈',v:'\\approx'},{t:'<',v:'<'},
+      {t:'>',v:'>'},{t:'≤',v:'\\leq'},{t:'≥',v:'\\geq'},{t:'±',v:'\\pm'},
+      {t:'∓',v:'\\mp'},{t:'·',v:'\\cdot'},{t:'⋯',v:'\\cdots'},{t:'…',v:'\\ldots'},
+      {t:'∴',v:'\\therefore'},{t:'∵',v:'\\because'},{t:'∞',v:'\\infty'},
+      {t:'∂',v:'\\partial'},{t:'∇',v:'\\nabla'},{t:'∀',v:'\\forall'},
+      {t:'∃',v:'\\exists'},{t:'∅',v:'\\emptyset'},{t:'∈',v:'\\in'},
+      {t:'∉',v:'\\notin'},{t:'∋',v:'\\ni'},{t:'⊂',v:'\\subset'},
+      {t:'⊃',v:'\\supset'},{t:'⊆',v:'\\subseteq'},{t:'⊇',v:'\\supseteq'},
+      {t:'∪',v:'\\cup'},{t:'∩',v:'\\cap'},{t:'⊕',v:'\\oplus'},{t:'⊗',v:'\\otimes'},
+      {t:'∠',v:'\\angle'},{t:'⊥',v:'\\perp'},{t:'∥',v:'\\parallel'},
+      {t:'≡',v:'\\equiv'},{t:'≅',v:'\\cong'},
+    ]},
+    {cat:'希腊字母', items:[
+      {t:'α',v:'\\alpha'},{t:'β',v:'\\beta'},{t:'γ',v:'\\gamma'},{t:'δ',v:'\\delta'},
+      {t:'ε',v:'\\varepsilon'},{t:'ζ',v:'\\zeta'},{t:'η',v:'\\eta'},{t:'θ',v:'\\theta'},
+      {t:'ι',v:'\\iota'},{t:'κ',v:'\\kappa'},{t:'λ',v:'\\lambda'},{t:'μ',v:'\\mu'},
+      {t:'ν',v:'\\nu'},{t:'ξ',v:'\\xi'},{t:'π',v:'\\pi'},{t:'ρ',v:'\\rho'},
+      {t:'σ',v:'\\sigma'},{t:'τ',v:'\\tau'},{t:'υ',v:'\\upsilon'},{t:'φ',v:'\\varphi'},
+      {t:'χ',v:'\\chi'},{t:'ψ',v:'\\psi'},{t:'ω',v:'\\omega'},
+      {t:'Γ',v:'\\Gamma'},{t:'Δ',v:'\\Delta'},{t:'Θ',v:'\\Theta'},{t:'Λ',v:'\\Lambda'},
+      {t:'Π',v:'\\Pi'},{t:'Σ',v:'\\Sigma'},{t:'Φ',v:'\\Phi'},{t:'Ψ',v:'\\Psi'},
+      {t:'Ω',v:'\\Omega'},
+    ]},
+    {cat:'分数微分', items:[
+      {t:'\\frac',v:'\\frac{}{}'},{t:'\\dfrac',v:'\\dfrac{}{}'},
+      {t:'\\tfrac',v:'\\tfrac{}{}'},{t:'\\cfrac',v:'\\cfrac{}{}'},
+      {t:'dy/dx',v:'\\frac{dy}{dx}'},{t:'∂y/∂x',v:'\\frac{\\partial y}{\\partial x}'},
+      {t:'d²y/dx²',v:'\\frac{d^2y}{dx^2}'},{t:'∂²/∂x²',v:'\\frac{\\partial^2}{\\partial x^2}'},
+      {t:'\\binom',v:'\\binom{}{}'},{t:'\\dbinom',v:'\\dbinom{}{}'},
+    ]},
+    {cat:'根式角标', items:[
+      {t:'√a',v:'\\sqrt{}'},{t:'\\sqrt[n]',v:'\\sqrt[]{}'},{t:'xⁿ',v:'^{}'},
+      {t:'xₙ',v:'_{}'},{t:'xᵢʲ',v:'_{}^{}'},{t:'\\overline',v:'\\overline{}'},
+      {t:'\\underline',v:'\\underline{}'},{t:'\\hat',v:'\\hat{}'},{t:'\\vec',v:'\\vec{}'},
+      {t:'\\dot',v:'\\dot{}'},{t:'\\ddot',v:'\\ddot{}'},{t:'\\bar',v:'\\bar{}'},
+      {t:'\\tilde',v:'\\tilde{}'},{t:'\\widehat',v:'\\widehat{}'},
+      {t:'\\overbrace',v:'\\overbrace{}^{}'},{t:'\\underbrace',v:'\\underbrace{}_{}'},
+    ]},
+    {cat:'极限对数', items:[
+      {t:'\\lim',v:'\\lim_{x \\to \\infty}'},{t:'\\lim₀',v:'\\lim_{x \\to 0}'},
+      {t:'\\limₙ',v:'\\lim_{n \\to \\infty}'},{t:'\\log',v:'\\log'},
+      {t:'\\ln',v:'\\ln'},{t:'\\lg',v:'\\lg'},{t:'\\logₙ',v:'\\log_{}'},
+      {t:'\\exp',v:'\\exp'},{t:'\\max',v:'\\max'},{t:'\\min',v:'\\min'},
+      {t:'\\sup',v:'\\sup'},{t:'\\inf',v:'\\inf'},
+    ]},
+    {cat:'三角函数', items:[
+      {t:'\\sin',v:'\\sin'},{t:'\\cos',v:'\\cos'},{t:'\\tan',v:'\\tan'},
+      {t:'\\cot',v:'\\cot'},{t:'\\sec',v:'\\sec'},{t:'\\csc',v:'\\csc'},
+      {t:'\\arcsin',v:'\\arcsin'},{t:'\\arccos',v:'\\arccos'},{t:'\\arctan',v:'\\arctan'},
+      {t:'\\sinh',v:'\\sinh'},{t:'\\cosh',v:'\\cosh'},{t:'\\tanh',v:'\\tanh'},
+      {t:'\\coth',v:'\\coth'},
+    ]},
+    {cat:'积分运算', items:[
+      {t:'∫',v:'\\int'},{t:'∫ₐᵇ',v:'\\int_{}^{}'},{t:'∬',v:'\\iint'},
+      {t:'∭',v:'\\iiint'},{t:'∮',v:'\\oint'},{t:'∯',v:'\\oiint'},
+      {t:'∰',v:'\\oiiint'},{t:'∫ₐᵇf(x)dx',v:'\\int_{a}^{b} f(x)\\,dx'},
+      {t:'dx',v:'\\,dx'},{t:'dy',v:'\\,dy'},{t:'dz',v:'\\,dz'},{t:'dt',v:'\\,dt'},
+    ]},
+    {cat:'大型运算', items:[
+      {t:'∑',v:'\\sum_{i=1}^{n}'},{t:'∏',v:'\\prod_{i=1}^{n}'},
+      {t:'⋃',v:'\\bigcup_{i=1}^{n}'},{t:'⋂',v:'\\bigcap_{i=1}^{n}'},
+      {t:'⋁',v:'\\bigvee_{i=1}^{n}'},{t:'⋀',v:'\\bigwedge_{i=1}^{n}'},
+      {t:'⨁',v:'\\bigoplus_{i=1}^{n}'},{t:'⨂',v:'\\bigotimes_{i=1}^{n}'},
+      {t:'∐',v:'\\coprod_{i=1}^{n}'},
+    ]},
+    {cat:'括号取整', items:[
+      {t:'( )',v:'\\left( \\right)'},{t:'[ ]',v:'\\left[ \\right]'},
+      {t:'{ }',v:'\\left\\{ \\right\\}'},{t:'| |',v:'\\left| \\right|'},
+      {t:'‖ ‖',v:'\\left\\| \\right\\|'},{t:'⌊ ⌋',v:'\\left\\lfloor \\right\\rfloor'},
+      {t:'⌈ ⌉',v:'\\left\\lceil \\right\\rceil'},{t:'〈 〉',v:'\\langle \\rangle'},
+      {t:'\\binom',v:'\\binom{}{}'},{t:'\\tbinom',v:'\\tbinom{}{}'},
+    ]},
+    {cat:'数组矩阵', items:[
+      {t:'matrix',v:'\\begin{matrix} \\end{matrix}'},{t:'pmatrix',v:'\\begin{pmatrix} \\end{pmatrix}'},
+      {t:'bmatrix',v:'\\begin{bmatrix} \\end{bmatrix}'},{t:'vmatrix',v:'\\begin{vmatrix} \\end{vmatrix}'},
+      {t:'Vmatrix',v:'\\begin{Vmatrix} \\end{Vmatrix}'},{t:'array',v:'\\begin{array}{c} \\end{array}'},
+      {t:'aligned',v:'\\begin{aligned} \\end{aligned}'},{t:'cases',v:'\\begin{cases} \\end{cases}'},
+    ]},
+  ];
+
+  let activeCat = 0;
+  let swapped = false;
+
+  function buildCats(){
+    catContainer.innerHTML = '';
+    SYMBOLS.forEach((g,i)=>{
+      const b = document.createElement('button');
+      b.className = 'ltxe-cat-btn' + (i===activeCat ? ' active' : '');
+      b.textContent = g.cat;
+      b.addEventListener('click', () => { activeCat = i; buildCats(); buildSymbols(); });
+      catContainer.appendChild(b);
+    });
+  }
+
+  function buildSymbols(){
+    symContainer.innerHTML = '';
+    const g = SYMBOLS[activeCat];
+    if(!g) return;
+    g.items.forEach(it => {
+      const b = document.createElement('button');
+      b.className = 'ltxe-sym-btn';
+      b.innerHTML = '<span class="sym-lbl">' + it.t.replace(/</g,'&lt;') + '</span>';
+      b.title = it.v;
+      b.addEventListener('click', () => insertAtCursor(it.v));
+      symContainer.appendChild(b);
+    });
+  }
+
+  function insertAtCursor(text){
+    const el = input;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const val = el.value;
+    el.value = val.slice(0, start) + text + val.slice(end);
+    el.selectionStart = el.selectionEnd = start + text.length;
+    el.focus();
+    renderPreview();
+    updateStat();
+  }
+
+  function renderPreview(){
+    if(!preview) return;
+    const code = input.value.trim();
+    if(!code){
+      preview.innerHTML = '<span style="color:#aaa;font-size:13px">预览区域</span>';
+      return;
+    }
+    try {
+      if(typeof katex === 'undefined'){
+        preview.innerHTML = '<span style="color:#ff6b7a;font-size:13px">KaTeX 尚未加载，请稍候 …</span>';
+        return;
+      }
+      katex.render(code, preview, {
+        throwOnError: false,
+        displayMode: true,
+        errorColor: '#ff6b7a',
+      });
+    } catch(e){
+      preview.innerHTML = '<span style="color:#ff6b7a;font-size:13px">' + (e.message || '渲染出错') + '</span>';
+    }
+  }
+
+  function updateStat(){
+    statLen.textContent = input.value.length.toLocaleString() + ' 字符';
+  }
+
+  btnSwap.addEventListener('click', () => {
+    swapped = !swapped;
+    split.classList.toggle('swapped', swapped);
+    if(swapped){
+      labelLeft.textContent = '渲染预览';
+      labelRight.textContent = 'LaTeX 源码';
+    } else {
+      labelLeft.textContent = 'LaTeX 源码';
+      labelRight.textContent = '渲染预览';
+    }
+  });
+
+  btnClear.addEventListener('click', () => {
+    input.value = '';
+    updateStat();
+    renderPreview();
+    input.focus();
+  });
+
+  btnCopy.addEventListener('click', async () => {
+    const code = input.value;
+    if(!code){ statLen.textContent = '无内容可复制'; setTimeout(updateStat, 1500); return; }
+    try {
+      await navigator.clipboard.writeText(code);
+      statLen.textContent = '已复制到剪贴板';
+      setTimeout(updateStat, 1500);
+    } catch(e){
+      input.select();
+      document.execCommand('copy');
+      statLen.textContent = '已复制';
+      setTimeout(updateStat, 1500);
+    }
+    input.focus();
+  });
+
+  let debounce;
+  input.addEventListener('input', () => {
+    updateStat();
+    clearTimeout(debounce);
+    debounce = setTimeout(renderPreview, 200);
+  });
+
+  // Wait for KaTeX (deferred script)
+  function waitKatex(cb){
+    if(typeof katex !== 'undefined') return cb();
+    let tries = 0;
+    const iv = setInterval(() => {
+      if(typeof katex !== 'undefined'){ clearInterval(iv); cb(); }
+      else if(++tries > 50){ clearInterval(iv); }
+    }, 200);
+  }
+
+  buildCats();
+  buildSymbols();
+  updateStat();
+  waitKatex(renderPreview);
 })();
 </script>
 </body>
