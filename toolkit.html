@@ -1,9 +1,14 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OpenClaw · Toolkit</title>
+<script src="./lib/xlsx.full.min.js"></script>
+<script src="./lib/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
 <style>
   :root{
     --bg:#0b0d12; --bg-2:#12151d; --panel:#161a24; --panel-2:#1d2230;
@@ -57,6 +62,13 @@
   .card h3{margin:0 0 12px;font-size:14px;font-weight:600;color:var(--text)}
   .card .desc{color:var(--text-dim);font-size:12.5px;margin-bottom:14px}
 
+  .dropzone{border:1.5px dashed var(--border-2);border-radius:var(--radius);padding:44px 20px;text-align:center;cursor:pointer;background:linear-gradient(180deg,var(--panel-2) 0%,transparent 100%);transition:all .2s ease;display:block}
+  .dropzone:hover,.dropzone.drag{border-color:var(--accent);background:rgba(124,156,255,.08)}
+  .dropzone .icon-wrap{width:52px;height:52px;border-radius:14px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;background:rgba(124,156,255,.12);color:var(--accent)}
+  .dropzone .hint{color:var(--text-dim);font-size:12.5px;margin-top:6px}
+  .dropzone .main-text{font-weight:600;font-size:14px}
+  .dropzone input{display:none}
+
   .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;border:1px solid var(--border-2);background:var(--panel-2);color:var(--text);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s ease}
   .btn:hover{border-color:var(--accent);color:var(--accent)}
   .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -64,22 +76,153 @@
   .btn.primary:hover{filter:brightness(1.08);color:#fff}
   .btn.ghost{background:transparent}
 
+  .file-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2);margin-top:10px}
+  .file-row .name{font-weight:600;word-break:break-all}
+  .file-row .meta{color:var(--text-dim);font-size:12px}
+  .file-row .ico-file{width:30px;height:30px;border-radius:8px;background:rgba(98,224,199,.12);color:var(--accent-2);display:flex;align-items:center;justify-content:center;flex:0 0 30px}
+  .file-row .spacer{flex:1}
+
+  .options{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 4px}
+  .opt{position:relative}
+  .opt input{position:absolute;opacity:0;pointer-events:none}
+  .opt span{display:inline-block;padding:8px 14px;border-radius:8px;border:1px solid var(--border-2);background:var(--panel-2);color:var(--text-dim);font-size:12.5px;cursor:pointer;transition:all .15s ease}
+  .opt input:checked + span{border-color:var(--accent);background:rgba(124,156,255,.1);color:var(--text)}
+  .opt span small{display:block;color:var(--text-muted);font-size:10.5px;margin-top:2px}
+
+  .progress{height:6px;background:var(--panel-2);border-radius:3px;overflow:hidden;margin:14px 0}
+  .progress .bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));width:0;transition:width .25s ease}
+  .log{font-family:"JetBrains Mono","Fira Code",Consolas,Menlo,monospace;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;max-height:240px;overflow:auto;color:var(--text-dim);margin-top:14px}
+  .log .line{white-space:pre-wrap;word-break:break-all;margin:1px 0}
+  .log .line.ok{color:var(--ok)}
+  .log .line.warn{color:var(--warn)}
+  .log .line.err{color:var(--danger)}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:14px 0}
+  .stat{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px}
+  .stat .k{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+  .stat .v{font-size:18px;font-weight:700;margin-top:4px}
+  .stat .v.warn{color:var(--warn)}
+  .stat .v.ok{color:var(--ok)}
+
+  .notice{padding:10px 14px;border-radius:var(--radius-sm);font-size:12.5px;margin-top:10px;display:flex;gap:10px;align-items:flex-start}
+  .notice.info{background:rgba(124,156,255,.08);border:1px solid rgba(124,156,255,.25);color:var(--text-dim)}
+  .notice.warn{background:rgba(255,197,96,.08);border:1px solid rgba(255,197,96,.25);color:#ffd98c}
+
+  .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-top:6px}
+  .flow .step{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
+  .flow .step .num{width:22px;height:22px;border-radius:50%;background:rgba(124,156,255,.15);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:6px}
+  .flow .step h4{margin:0 0 6px;font-size:13px}
+  .flow .step p{margin:0;color:var(--text-dim);font-size:12px;line-height:1.6}
+
+  .config-list{margin:8px 0 0;padding-left:18px;color:var(--text-dim);font-size:12.5px}
+  .config-list li{margin:2px 0}
+
+  /* collapsible details */
+  details.card{padding:0;transition:border-color .15s ease}
+  details.card > summary{list-style:none;cursor:pointer;padding:16px 22px;display:flex;align-items:center;gap:10px;user-select:none;border-radius:var(--radius)}
+  details.card > summary::-webkit-details-marker{display:none}
+  details.card > summary .chev{width:16px;height:16px;color:var(--text-muted);transition:transform .15s ease;flex:0 0 16px}
+  details.card[open] > summary .chev{transform:rotate(90deg);color:var(--accent)}
+  details.card > summary .sum-title{font-weight:600;font-size:14px;color:var(--text)}
+  details.card > summary .sum-sub{color:var(--text-muted);font-size:12px;margin-left:auto}
+  details.card > summary:hover{background:rgba(124,156,255,.04)}
+  details.card[open] > summary{border-bottom:1px solid var(--border)}
+  details.card > .details-body{padding:18px 22px 22px}
+
+  /* header right-side meta */
+  .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .header-right a.link-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--text-dim);font-size:11.5px;transition:all .15s ease}
+  .header-right a.link-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* unified compact option rows */
+  .opt-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  .opt-row + .opt-row{margin-top:8px}
+  .opt-row .label{font-size:12px;color:var(--text-muted);width:70px;flex:0 0 70px}
+
+  /* grid for upload area at top */
+  .upload-grid{display:grid;grid-template-columns:minmax(280px,1fr) 1fr;gap:18px;align-items:start}
+  @media (max-width:900px){ .upload-grid{grid-template-columns:1fr} }
+
+  .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .result-section{display:none}
+  .result-section.show{display:block}
+  .result-item{padding:14px 0;border-top:1px dashed var(--border);margin-top:14px}
+  .result-item:first-child{border-top:none;padding-top:0;margin-top:0}
+  .result-item h4{margin:0 0 6px;font-size:13px}
+
   @media (max-width:820px){
     .layout{grid-template-columns:1fr}
     .sidebar{position:static;height:auto;border-right:none;border-bottom:1px solid var(--border)}
   }
 
-  /* ===== HTML 在线运行 ===== */
+  /* ===== Markdown 转译 ===== */
+  .ltxe-palette{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;flex-shrink:0}
+  .ltxe-palette .cat-card{flex:1 1 90px;min-width:80px;max-width:120px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2);padding:10px 6px;text-align:center;cursor:pointer;transition:all .15s ease}
+  .ltxe-palette .cat-card:hover{border-color:var(--accent);background:rgba(124,156,255,.08)}
+  .ltxe-palette .cat-card.active{border-color:var(--accent);background:rgba(124,156,255,.12)}
+  .ltxe-palette .cat-card .cat-ico{font-size:20px;line-height:1.2;margin-bottom:4px;color:var(--text)}
+  .ltxe-palette .cat-card .cat-name{font-size:11px;color:var(--text-dim)}
+  .ltxe-symbols{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;margin-bottom:10px;max-height:180px;overflow-y:auto;padding:2px;flex-shrink:0}
+  .ltxe-symbols .sym-btn{display:flex;align-items:center;justify-content:center;height:38px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);cursor:pointer;font-size:15px;transition:all .15s ease}
+  .ltxe-symbols .sym-btn:hover{border-color:var(--accent);background:rgba(124,156,255,.08)}
+  .ltxe-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;flex-shrink:0}
+  .ltxe-workspace{display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:0;flex:1}
+  .ltxe-box{display:flex;flex-direction:column;gap:6px;min-height:0}
+  .ltxe-box-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
+  .ltxe-box-area{flex:1;font-family:"JetBrains Mono","Fira Code",Consolas,monospace;font-size:14px;line-height:1.6;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre;transition:border-color .15s ease}
+  .ltxe-box-area:focus{border-color:var(--accent)}
+  .ltxe-box-render{flex:1;border:1px solid var(--border);border-radius:var(--radius-sm);background:#fff;overflow:auto;padding:14px 16px;display:flex;align-items:center;justify-content:center}
+  .ltxe-box-render .katex{font-size:1.15em}
+  #tool-latexequ .card{display:flex;flex-direction:column;padding:14px 18px;height:calc(100vh - 100px)}
+  @media (max-width:900px){
+    .ltxe-workspace{grid-template-columns:1fr;min-height:0}
+    .ltxe-workspace .ltxe-box{min-height:240px}
+    #tool-latexequ .card{height:auto;min-height:500px}
+  }
+
+  .md-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .md-toolbar .spacer{flex:1}
+  .md-opt{display:inline-flex;gap:6px;align-items:center;color:var(--text-dim);font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);cursor:pointer;user-select:none;transition:all .15s ease}
+  .md-opt:hover{border-color:var(--accent);color:var(--text)}
+  .md-opt input{accent-color:var(--accent);margin:0}
+  .md-opt.md-trans-toggle{gap:4px}
+  .md-opt.md-trans-toggle input:checked ~ *{color:var(--accent)}
+
+  .md-select{font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2);color:var(--text);cursor:pointer;outline:none;transition:border-color .15s ease}
+  .md-select:hover{border-color:var(--accent)}
+  .md-select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(124,156,255,.15)}
+
+  .md-trans-status{font-size:11.5px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--panel-2);border:1px solid var(--border)}
+  .md-trans-status.busy{color:var(--accent);border-color:rgba(124,156,255,.35);background:rgba(124,156,255,.06)}
+  .md-trans-status.ok{color:var(--ok);border-color:rgba(98,224,199,.35);background:rgba(98,224,199,.06)}
+  .md-trans-status.err{color:var(--danger);border-color:rgba(255,107,122,.4);background:rgba(255,107,122,.06)}
+  .md-trans-status .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 6px}
+  .md-trans-status.busy .dot{animation:mdpulse 1.2s ease-in-out infinite}
+  @keyframes mdpulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+
+  /* Auto-detected non-translatable values (quoted items in extracted/identified context) */
+  .md-preview .notrans{background:rgba(98,224,199,.08);border-bottom:1px dashed rgba(98,224,199,.45);padding:0 2px;border-radius:3px}
+
+  .md-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:calc(100vh - 260px);min-height:520px}
+  @media (max-width:900px){
+    .md-split{grid-template-columns:1fr;height:auto}
+    .md-split .md-input,.md-split .md-preview{min-height:380px}
+  }
+  .md-input{width:100%;height:100%;font-family:"JetBrains Mono","Fira Code",Consolas,Menlo,monospace;font-size:13px;line-height:1.6;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);resize:none;outline:none;overflow:auto;tab-size:2;white-space:pre;transition:border-color .15s ease}
+  .md-input:focus{border-color:var(--accent)}
+
+  /* When Markdown tool is visible, break out of the 1200px cap to give more room */
+  main.main:has(#tool-markdown:not([hidden])){max-width:none;padding:18px 24px 24px}
+  main.main:has(#tool-markdown:not([hidden])) #tool-markdown .page-header{margin-bottom:12px}
+  main.main:has(#tool-markdown:not([hidden])) #tool-markdown .card{padding:14px 18px}
+
+  /* Same wide-layout treatment for the HTML runner */
   main.main.htmlrun-active{max-width:none;padding:18px 24px 24px}
   main.main.htmlrun-active #tool-htmlrun .page-header{margin-bottom:12px}
   main.main.htmlrun-active #tool-htmlrun .card{padding:14px 18px}
 
-  /* HTML runner: card width follows input area */
-  main.main.htmlrun-active #tool-htmlrun .card.htmlrun-card{
-    width:100%;
-    max-width:none;
-    margin:0;
-  }
+  /* HTML runner: split layout — input left, preview right */
+  main.main.htmlrun-active #tool-htmlrun .card.htmlrun-card{width:100%;max-width:none;margin:0}
 
   .htmlrun-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;height:calc(100vh - 260px);min-height:520px;transition:all .25s ease}
   .htmlrun-split.collapsed{grid-template-columns:1fr}
@@ -92,11 +235,57 @@
   .htmlrun-toggle-preview.active{background:rgba(124,156,255,.12);border-color:rgba(124,156,255,.35);color:var(--accent)}
   @media (max-width: 980px){
     .htmlrun-split{grid-template-columns:1fr;height:auto;min-height:420px}
+    .htmlrun-split.collapsed{grid-template-columns:1fr;max-width:none;margin:0}
     .htmlrun-preview{display:none}
+    .htmlrun-split.collapsed .htmlrun-preview{display:none}
   }
 
-  .md-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
-  .md-toolbar .spacer{flex:1}
+  /* Pin viewport while the Markdown tool is active. The textarea + preview
+     both have `overflow:auto` and a bounded height, but Chromium still
+     inflates `document.documentElement.scrollHeight` based on a descendant
+     overflow container's own `scrollHeight`, which creates a tall blank
+     region below the page. Fixing body to the viewport eliminates the
+     phantom scroll region entirely without affecting the left/right pane
+     internal scrolling. */
+  html.md-tool-active{height:100vh;overflow:hidden}
+  body.md-tool-active{position:fixed;inset:0;overflow:hidden}
+
+  .md-preview{padding:14px 22px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:auto;color:var(--text);font-size:14px;line-height:1.75}
+  .md-preview > *:first-child{margin-top:0}
+  .md-preview > *:last-child{margin-bottom:0}
+  .md-preview h1,.md-preview h2,.md-preview h3,.md-preview h4,.md-preview h5,.md-preview h6{margin:18px 0 8px;line-height:1.3;font-weight:600;color:var(--text)}
+  .md-preview h1{font-size:22px;border-bottom:1px solid var(--border);padding-bottom:6px}
+  .md-preview h2{font-size:18px;border-bottom:1px solid var(--border);padding-bottom:4px}
+  .md-preview h3{font-size:16px}
+  .md-preview h4{font-size:14px}
+  .md-preview h5,.md-preview h6{font-size:13px;color:var(--text-dim)}
+  .md-preview p{margin:8px 0}
+  .md-preview ul,.md-preview ol{padding-left:26px;margin:8px 0}
+  .md-preview li{margin:3px 0}
+  .md-preview li > p{margin:4px 0}
+  .md-preview blockquote{border-left:3px solid var(--accent);padding:4px 14px;color:var(--text-dim);margin:10px 0;background:rgba(124,156,255,.06);border-radius:0 6px 6px 0}
+  .md-preview blockquote > *:first-child{margin-top:0}
+  .md-preview blockquote > *:last-child{margin-bottom:0}
+  .md-preview code{font-family:"JetBrains Mono",Consolas,Menlo,monospace;font-size:12.5px;background:var(--bg);padding:1px 6px;border-radius:4px;color:var(--accent-2);word-break:break-all}
+  .md-preview pre{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;overflow:auto;margin:10px 0}
+  .md-preview pre code{background:none;padding:0;color:var(--text);word-break:normal;white-space:pre}
+  .md-preview table{border-collapse:collapse;margin:10px 0;font-size:13px;min-width:320px}
+  .md-preview th,.md-preview td{border:1px solid var(--border);padding:6px 10px;text-align:left;vertical-align:top}
+  .md-preview th{background:var(--panel);font-weight:600}
+  .md-preview tr:nth-child(even) td{background:rgba(124,156,255,.03)}
+  .md-preview a{color:var(--accent);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}
+  .md-preview a:hover{text-decoration-style:solid}
+  .md-preview img{max-width:100%;border-radius:6px;display:block;margin:10px 0}
+  .md-preview hr{border:none;border-top:1px solid var(--border);margin:14px 0}
+  .md-preview input[type=checkbox]{margin-right:6px;vertical-align:middle}
+  .md-preview del{color:var(--text-muted)}
+  .md-preview kbd{display:inline-block;padding:1px 6px;border:1px solid var(--border-2);border-bottom-width:2px;border-radius:4px;background:var(--panel);font-size:11px;font-family:"JetBrains Mono",Consolas,monospace}
+
+  .md-status{color:var(--text-muted);font-size:11.5px;margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end;align-items:center}
+  .md-status .sep{color:var(--border-2)}
+
+  .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--panel);color:var(--text);padding:10px 20px;border-radius:999px;border:1px solid var(--border);font-size:12.5px;z-index:9999;box-shadow:var(--shadow);transition:opacity .3s ease}
+  .toast.err{border-color:var(--danger);color:var(--danger)}
 </style>
 </head>
 <body>
@@ -111,19 +300,23 @@
     </div>
     <div class="nav-label">工具</div>
     <div class="nav-item active" data-tool="jsonl2xlsx">
-      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M16 13H8M16 17H8M10 9H8"></path></svg>
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
       <span>评测 JSONL → Excel</span>
     </div>
     <div class="nav-item" data-tool="markdown">
-      <svg class="ico" viewBox="0 0 16 16" fill="currentColor"><path d="M14.85 3H1.15C.52 3 0 3.52 0 4.15v7.69C0 12.48.52 13 1.15 13h13.69c.64 0 1.15-.52 1.15-1.15v-7.7C16 3.52 15.48 3 14.85 3zM9 11H7V8L5.5 9.92 4 8v3H2V5h2l1.5 2L7 5h2v6zm2.99.5L9.5 8H11V5h2v3h1.5l-2.51 3.5z"></path></svg>
+      <svg class="ico" viewBox="0 0 16 16" fill="currentColor"><path d="M14.85 3H1.15C.52 3 0 3.52 0 4.15v7.69C0 12.48.52 13 1.15 13h13.69c.64 0 1.15-.52 1.15-1.15v-7.7C16 3.52 15.48 3 14.85 3zM9 11H7V8L5.5 9.92 4 8v3H2V5h2l1.5 2L7 5h2v6zm2.99.5L9.5 8H11V5h2v3h1.5l-2.51 3.5z"/></svg>
       <span>Markdown 转译</span>
     </div>
     <div class="nav-item" data-tool="htmlrun">
-      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
       <span>HTML 在线运行</span>
     </div>
+    <div class="nav-item" data-tool="latexequ">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+      <span>LaTeX 公式</span>
+    </div>
     <div class="nav-item disabled" title="敬请期待">
-      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
       <span>敬请期待</span>
     </div>
     <div class="sidebar-foot">
@@ -139,11 +332,187 @@
           <h1 class="page-title">评测 JSONL → Excel 转换器</h1>
           <div class="page-sub">把 Langfuse 评测导出的 .jsonl 整理成结构化 Excel。数据不离开本机。</div>
         </div>
+        <div class="header-right">
+          <span class="badge dot">浏览器本地处理</span>
+          <a class="link-btn" href="https://github.com/ToGouEre/Tools" target="_blank" rel="noopener">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.72-4.04-1.61-4.04-1.61-.55-1.38-1.33-1.75-1.33-1.75-1.08-.74.08-.73.08-.73 1.2.09 1.83 1.23 1.83 1.23 1.07 1.83 2.81 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.54-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .3"/></svg>
+            源码
+          </a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>上传 & 转换</h3>
+        <div class="desc">支持 .jsonl（单文件或多文件同时处理）。程序会自动识别是「多配置评测」还是「竞技场对比」两种 schema。</div>
+
+        <div class="upload-grid">
+          <label class="dropzone" id="dropzone">
+            <div class="icon-wrap">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div class="main-text">把 .jsonl 拖到这里</div>
+            <div class="hint">或点击选择 · 支持多选 · 本地处理不上传</div>
+            <input type="file" id="fileInput" accept=".jsonl,application/x-ndjson,application/json" multiple>
+          </label>
+
+          <div>
+            <div class="opt-row">
+              <span class="label">模式</span>
+              <label class="opt"><input type="radio" name="mode" value="auto" checked><span>自动识别</span></label>
+              <label class="opt"><input type="radio" name="mode" value="multi"><span>多配置评测</span></label>
+              <label class="opt"><input type="radio" name="mode" value="single"><span>竞技场对比</span></label>
+            </div>
+            <div class="opt-row">
+              <span class="label">清洗</span>
+              <label class="opt"><input type="checkbox" id="optClean" checked><span>eval_answer Markdown</span></label>
+              <label class="opt"><input type="checkbox" id="optCleanBaseline" checked><span>baseline_answer Markdown</span></label>
+            </div>
+
+            <div class="actions">
+              <button class="btn primary" id="btnConvert" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+                开始转换
+              </button>
+              <button class="btn ghost" id="btnClear">清空</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="fileList"></div>
+        <div class="progress" id="progress" style="display:none"><div class="bar" id="progressBar"></div></div>
+        <div class="log" id="log" style="display:none"></div>
+      </div>
+
+      <div class="card result-section" id="resultSection">
+        <h3>转换结果</h3>
+        <div id="resultsContainer"></div>
+      </div>
+
+      <details class="card">
+        <summary>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="sum-title">处理逻辑</span>
+          <span class="sum-sub">点击展开查看 7 步流程</span>
+        </summary>
+        <div class="details-body">
+          <div class="flow">
+            <div class="step"><h4><span class="num">1</span>解析 JSONL</h4><p>按行读取，每行一条 trace 记录；提取 datasetItemId、messages、baseline_model_response、traceOutput、scores。</p></div>
+            <div class="step"><h4><span class="num">2</span>按 item 聚合</h4><p>同一 datasetItemId 可能有多条记录，优先挑有 traceOutput 的那条；顺序按首次出现固定。</p></div>
+            <div class="step"><h4><span class="num">3</span>字段提取</h4><p>query 取 messages 最后一条的纯文本（跳过 resource / image 标签）；eval_answer 取 final_output.content 里 type=text 部分；thinking 取 type=think/thinking/reasoning 部分（或 final_output.thinking / reasoning_content 兜底）。内容按原样保留，不截断也不做额外处理。</p></div>
+            <div class="step"><h4><span class="num">4</span>代码符号清洗</h4><p>baseline_answer / eval_answer / thinking 剥 ``` 代码块围栏、反引号、# 标题、**粗体** 等 Markdown，保留排版与换行。</p></div>
+            <div class="step"><h4><span class="num">5</span>分数展开</h4><p>自动识别：多配置（每个评测维度两列：分数 + 理由，列数按文件实际出现的 score 动态）或单配置（score_config/value/comment）。</p></div>
+            <div class="step"><h4><span class="num">6</span>长内容直出</h4><p>Excel 规格单元格上限 32767 字符；本工具已解除 SheetJS 的硬校验，超长也原样写入 xlsx。Excel / WPS 的显示表现取决于各自实现。</p></div>
+            <div class="step"><h4><span class="num">7</span>回读自检</h4><p>生成 xlsx 后立即用 XLSX.read 重新解析，把每一行每一列的读回值与原始写入值逐字对比，报告任何不一致（位置、长度、首差位置、片段对照）。通过即保证所有内容完整无遗漏。</p></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="card">
+        <summary>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="sum-title">输出列说明</span>
+          <span class="sum-sub">两种 schema 的列布局</span>
+        </summary>
+        <div class="details-body">
+          <p style="color:var(--text-dim);font-size:12.5px;margin:0 0 10px">两种模式都会生成一行一 item（按源文件里 datasetItemId 首次出现顺序编号）。没有 traceOutput 的 item 会保留 query / key_point，分数列留空。</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+            <div>
+              <div style="font-weight:600;margin-bottom:6px">多配置评测 · 动态列数</div>
+              <ul class="config-list">
+                <li>序号 / datasetItemId / query / baseline_answer / eval_answer / <b>thinking</b> / key_point</li>
+                <li>下游分数列按文件实际出现的 score.name 动态拼接，每个两列：<code>[xxx] 分数</code> / <code>[xxx] 理由</code></li>
+                <li>已知顺序（优先）：online-单向-truthful / if / reasoning / perception、Vision-限制性指令、Vision-AI生图识别、底线-Repeat / 不正常输出代码 / 语言杂糅 / 不合理拒答</li>
+                <li>文件里出现的其他新 score 名称会自动追加在已知列后面</li>
+              </ul>
+            </div>
+            <div>
+              <div style="font-weight:600;margin-bottom:6px">竞技场对比 · 10 列</div>
+              <ul class="config-list">
+                <li>序号</li>
+                <li>datasetItemId</li>
+                <li>query</li>
+                <li>baseline_answer</li>
+                <li>eval_answer</li>
+                <li><b>thinking</b></li>
+                <li>key_point</li>
+                <li>score_config</li>
+                <li>score_value（Better / Worse / Same）</li>
+                <li>score_comment</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section id="tool-markdown" hidden>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Markdown 转译</h1>
+          <div class="page-sub">左侧输入原文，右侧实时渲染预览。支持 GFM 表格、任务列表、代码块、引用等扩展语法。</div>
+        </div>
+        <div class="header-right">
+          <span class="badge dot">实时渲染</span>
+          <a class="link-btn" href="https://github.com/ToGouEre/Tools" target="_blank" rel="noopener">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.79 23.4c.6.11.82-.26.82-.58v-2.02c-3.34.72-4.04-1.61-4.04-1.61-.55-1.38-1.33-1.75-1.33-1.75-1.08-.74.08-.73.08-.73 1.2.09 1.83 1.23 1.83 1.23 1.07 1.83 2.81 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.54-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.62-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .3"/></svg>
+            源码
+          </a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="md-toolbar">
+          <button class="btn" id="mdBtnSample">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            插入示例
+          </button>
+          <button class="btn ghost" id="mdBtnClear">清空</button>
+          <label class="md-opt"><input type="checkbox" id="mdOptBreaks" checked>单行回车即换行</label>
+          <label class="md-opt"><input type="checkbox" id="mdOptSync" checked>滚动同步</label>
+          <label class="md-opt md-trans-toggle"><input type="checkbox" id="mdOptTrans">翻译为</label>
+          <select id="mdTransLang" class="md-select" title="目标语言">
+            <option value="en">英语</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="zh-TW">繁体中文</option>
+            <option value="ja">日语</option>
+            <option value="ko">韩语</option>
+            <option value="fr">法语</option>
+            <option value="de">德语</option>
+            <option value="es">西班牙语</option>
+            <option value="ru">俄语</option>
+            <option value="vi">越南语</option>
+            <option value="th">泰语</option>
+            <option value="id">印尼语</option>
+            <option value="ar">阿拉伯语</option>
+          </select>
+          <span id="mdTransStatus" class="md-trans-status" hidden><span class="dot"></span><span class="t"></span></span>
+          <div class="spacer"></div>
+          <button class="btn" id="mdBtnCopyHtml">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            复制 HTML
+          </button>
+          <button class="btn" id="mdBtnDownloadMd">下载 .md</button>
+          <button class="btn primary" id="mdBtnDownloadHtml">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            下载 .html
+          </button>
+        </div>
+        <div class="md-split">
+          <textarea id="mdInput" class="md-input" spellcheck="false" placeholder="在这里输入 Markdown …"></textarea>
+          <div id="mdPreview" class="md-preview" aria-live="polite"></div>
+        </div>
+        <div class="md-status">
+          <span id="mdStatLen">0 字符</span>
+          <span class="sep">·</span>
+          <span id="mdStatLine">0 行</span>
+          <span class="sep">·</span>
+          <span id="mdStatWord">0 词</span>
+        </div>
       </div>
     </section>
 
     <!-- ====== HTML Runner ====== -->
-    <section id="tool-htmlrun" hidden="">
+    <section id="tool-htmlrun" hidden>
       <div class="page-header">
         <div>
           <h1 class="page-title">HTML 在线运行</h1>
@@ -160,12 +529,12 @@
             运行（新窗口）
           </button>
           <button class="btn" id="htmlBtnSample">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
             插入示例
           </button>
           <button class="btn ghost" id="htmlBtnClear">清空</button>
           <button class="htmlrun-toggle-preview active" id="htmlBtnTogglePreview" title="切换实时预览">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M9 21V9"></path></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
             预览
           </button>
           <div class="spacer"></div>
@@ -177,22 +546,583 @@
         </div>
       </div>
     </section>
+
+    <!-- ====== LaTeX 公式 ====== -->
+    <section id="tool-latexequ" hidden>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">LaTeX 公式</h1>
+          <div class="page-sub">上方选择分类，点击符号插入；左侧输入 LaTeX，右侧实时渲染。</div>
+        </div>
+        <div class="header-right">
+          <span class="badge dot">纯前端 · KaTeX</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ltxe-palette" id="ltxePalette"></div>
+        <div class="ltxe-toolbar">
+          <button class="btn ghost" id="ltxeBtnClear">清空</button>
+          <button class="btn" id="ltxeBtnCopy">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            复制 LaTeX
+          </button>
+          <div class="spacer"></div>
+          <span id="ltxeStat" class="badge">0 字符</span>
+        </div>
+        <div class="ltxe-workspace" id="ltxeWorkspace">
+          <div class="ltxe-box">
+            <div class="ltxe-box-label">LaTeX 源码</div>
+            <textarea id="ltxeInput" class="ltxe-box-area" spellcheck="false" placeholder="在这里输入 LaTeX 公式 …"></textarea>
+          </div>
+          <div class="ltxe-box">
+            <div class="ltxe-box-label">渲染预览</div>
+            <div id="ltxeRender" class="ltxe-box-render"></div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
 
 <script>
+// ====== Configs ======
+const MULTI_CONFIGS = [
+  'online-单向-truthful',
+  'online-单向-if',
+  'online-单向- reasoning',
+  'online-单向- perception',
+  'Vision-限制性指令',
+  'Vision-AI生图识别',
+  '底线-Repeat',
+  '底线-不正常输出代码',
+  '底线-语言杂糅',
+  '底线-不合理拒答',
+];
+
+// ====== Field helpers ======
+function extractQuery(input){
+  const msgs = input.messages || [];
+  for(let i=msgs.length-1;i>=0;i--){
+    const m = msgs[i];
+    if(Array.isArray(m.content)){
+      const parts = m.content
+        .filter(c => c && c.type === 'text')
+        .map(c => c.text)
+        .filter(t => t && !t.startsWith('<uploaded_files>') && !t.startsWith('<image ') && !t.startsWith('</image>'));
+      if(parts.length) return parts.join('\n').trim();
+    } else if(typeof m.content === 'string'){
+      const t = m.content.trim();
+      if(t && !t.startsWith('<')) return t;
+    }
+  }
+  return '';
+}
+function extractBaseline(input){
+  const b = input.baseline_model_response;
+  if(!b) return '';
+  if(typeof b === 'string') return b;
+  if(typeof b === 'object'){
+    if(Array.isArray(b.content)){
+      const texts = b.content.filter(c=>c && c.type==='text').map(c=>c.text);
+      return texts.join('\n').trim();
+    }
+    if(typeof b.content==='string') return b.content;
+    if(!Object.keys(b).length) return '';
+    return JSON.stringify(b);
+  }
+  return String(b);
+}
+function extractEval(out){
+  if(!out || !out.final_output) return '';
+  const c = out.final_output.content;
+  if(typeof c === 'string') return c;
+  if(Array.isArray(c)){
+    const texts = c.filter(p=>p && p.type==='text').map(p=>p.text).filter(Boolean);
+    if(texts.length) return texts.join('\n');
+  }
+  return '';
+}
+function extractThinking(out){
+  if(!out || !out.final_output) return '';
+  const c = out.final_output.content;
+  if(Array.isArray(c)){
+    const parts = c
+      .filter(p => p && (p.type === 'think' || p.type === 'thinking' || p.type === 'reasoning'))
+      .map(p => p.think || p.thinking || p.reasoning || p.text || '')
+      .filter(Boolean);
+    if(parts.length) return parts.join('\n');
+  }
+  // fallback: some providers put thinking at final_output.thinking / reasoning_content / message.reasoning_content
+  const fo = out.final_output;
+  if(typeof fo.thinking === 'string' && fo.thinking) return fo.thinking;
+  if(typeof fo.reasoning_content === 'string' && fo.reasoning_content) return fo.reasoning_content;
+  if(typeof fo.reasoning === 'string' && fo.reasoning) return fo.reasoning;
+  return '';
+}
+function cleanText(s){
+  if(!s) return '';
+  let t = String(s);
+  t = t.replace(/```[a-zA-Z0-9_-]*\s*\n?([\s\S]*?)```/g, (_, inner)=>inner);
+  t = t.replace(/`+/g, '');
+  t = t.replace(/^ {0,3}#{1,6}\s+/gm, '');
+  t = t.replace(/\*\*([^*]+)\*\*/g, '$1');
+  t = t.replace(/__([^_]+)__/g, '$1');
+  t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1$2');
+  t = t.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1$2');
+  t = t.replace(/^ {0,3}>\s?/gm, '');
+  t = t.replace(/^ {0,3}[-*_]{3,}\s*$/gm, '');
+  t = t.replace(/\n{3,}/g, '\n\n');
+  return t.trim();
+}
+
+// ====== Core pipeline ======
+function parseJsonl(text){
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  const out = [];
+  const errs = [];
+  for(let i=0;i<lines.length;i++){
+    try{ out.push(JSON.parse(lines[i])); }
+    catch(e){ errs.push({line:i+1, err:e.message}); }
+  }
+  return {records: out, errs};
+}
+function detectMode(records){
+  const names = new Set();
+  for(const r of records){ if(r.scores){ for(const s of r.scores) names.add(s.name); } }
+  if(names.size === 0) return {mode:'multi', names:[]}; // default
+  if(names.size === 1) return {mode:'single', names:[...names]};
+  return {mode:'multi', names:[...names]};
+}
+function buildRows(records, opts){
+  const byItem = new Map();
+  for(const d of records){
+    if(!byItem.has(d.datasetItemId)) byItem.set(d.datasetItemId, []);
+    byItem.get(d.datasetItemId).push(d);
+  }
+  const rowsData = [];
+  let idx = 0;
+  for(const [itemId, recs] of byItem){
+    idx++;
+    const withOutput = recs.find(r => r.traceOutput);
+    const pick = withOutput || recs[0];
+    const input = pick.datasetItemInput || {};
+    const query = extractQuery(input);
+    const baselineRaw = extractBaseline(input);
+    const evalRaw = extractEval(pick.traceOutput);
+    const thinkingRaw = extractThinking(pick.traceOutput);
+    const keyPoint = input.key_point || '';
+
+    const scores = (withOutput && withOutput.scores) || [];
+    const seenKey = new Set();
+    const uniqScores = [];
+    for(const s of scores){
+      // Normalize score name by trimming whitespace (same key despite " Vision-AI生图识别")
+      const name = String(s.name || '').trim();
+      const ns = Object.assign({}, s, {name});
+      const k = `${name}||${ns.stringValue || ns.value || ''}||${ns.comment || ''}`;
+      if(seenKey.has(k)) continue;
+      seenKey.add(k);
+      uniqScores.push(ns);
+    }
+
+    const cleanedBaseline = opts.cleanBaseline ? cleanText(baselineRaw) : (baselineRaw || '');
+    const cleanedEval     = opts.cleanEval     ? cleanText(evalRaw)     : (evalRaw     || '');
+    const cleanedThinking = opts.cleanEval     ? cleanText(thinkingRaw) : (thinkingRaw || '');
+
+    // Pass content through as-is. No truncation, no placeholder, no zip fallback.
+    rowsData.push({
+      idx, itemId,
+      query,
+      baseline_answer: cleanedBaseline,
+      eval_answer: cleanedEval,
+      thinking: cleanedThinking,
+      key_point: keyPoint,
+      scores: uniqScores,
+    });
+  }
+  return {rowsData};
+}
+
+function styleWorksheet(ws, colWidths){
+  ws['!cols'] = colWidths.map(w => ({wch: w}));
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for(let R=range.s.r; R<=range.e.r; R++){
+    for(let C=range.s.c; C<=range.e.c; C++){
+      const addr = XLSX.utils.encode_cell({r:R, c:C});
+      const cell = ws[addr];
+      if(!cell) continue;
+      cell.s = cell.s || {};
+      cell.s.alignment = {vertical:'top', wrapText:true};
+      if(R===0) cell.s.font = {bold:true};
+    }
+  }
+  ws['!freeze'] = {xSplit:0, ySplit:1};
+}
+
+function collectConfigs(rowsData){
+  // Known order first (from MULTI_CONFIGS), then any extras observed in data.
+  // Drops known configs that never appeared in this file.
+  const known = new Set(MULTI_CONFIGS);
+  const used = new Set();
+  for(const r of rowsData) for(const s of r.scores) used.add(String(s.name||'').trim());
+  const order = [];
+  for(const n of MULTI_CONFIGS) if(used.has(n)) order.push(n);
+  for(const n of used) if(!known.has(n)) order.push(n);
+  return order;
+}
+
+function buildWorkbookMulti(rowsData){
+  const CONFIGS = collectConfigs(rowsData);
+  const header = ['序号','datasetItemId','query','baseline_answer','eval_answer','thinking','key_point'];
+  for(const cfg of CONFIGS){ header.push(`[${cfg}] 分数`); header.push(`[${cfg}] 理由`); }
+  const aoa = [header];
+  for(const r of rowsData){
+    const byName = new Map();
+    for(const s of r.scores){
+      const n = String(s.name || '').trim();
+      if(!byName.has(n)) byName.set(n, s);
+    }
+    const row = [r.idx, r.itemId, r.query, r.baseline_answer, r.eval_answer, r.thinking, r.key_point];
+    for(const cfg of CONFIGS){
+      const s = byName.get(cfg);
+      row.push(s ? (s.stringValue ?? s.value ?? '') : '');
+      row.push(s ? (s.comment ?? '') : '');
+    }
+    aoa.push(row);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const widths = [6, 38, 40, 40, 60, 60, 50];
+  for(let i=0;i<CONFIGS.length;i++){ widths.push(10, 50); }
+  styleWorksheet(ws, widths);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '评测数据');
+  return wb;
+}
+function buildWorkbookSingle(rowsData){
+  const header = ['序号','datasetItemId','query','baseline_answer','eval_answer','thinking','key_point','score_config','score_value','score_comment'];
+  const aoa = [header];
+  for(const r of rowsData){
+    const s = r.scores[0];
+    aoa.push([
+      r.idx, r.itemId, r.query, r.baseline_answer, r.eval_answer, r.thinking, r.key_point,
+      s ? String(s.name || '').trim() : '',
+      s ? (s.stringValue ?? s.value ?? '') : '',
+      s ? (s.comment ?? '') : ''
+    ]);
+  }
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  styleWorksheet(ws, [6, 38, 40, 60, 60, 60, 50, 22, 12, 80]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '评测数据');
+  return wb;
+}
+
+async function convertOne(file, opts, log, progress){
+  log(`→ 读取 ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
+  const text = await file.text();
+  const {records, errs} = parseJsonl(text);
+  if(errs.length) log(`⚠ 跳过 ${errs.length} 行 JSON 解析错误`, 'warn');
+  log(`  解析 ${records.length} 条 trace 记录`);
+  progress(20);
+
+  // Mode
+  let mode = opts.mode;
+  const detected = detectMode(records);
+  if(mode === 'auto') mode = detected.mode;
+  log(`  模式: ${mode === 'multi' ? '多配置评测' : '竞技场对比'}（识别到 score: ${detected.names.length? detected.names.join(', ') : '无'}）`);
+  progress(30);
+
+  const {rowsData} = buildRows(records, opts);
+  log(`  聚合为 ${rowsData.length} 个 item`);
+  const withOut = rowsData.filter(r => r.scores.length > 0).length;
+  log(`  其中 ${withOut} 个有评测分数`);
+  progress(60);
+
+  const wb = mode === 'single' ? buildWorkbookSingle(rowsData) : buildWorkbookMulti(rowsData);
+  const xlsxArray = XLSX.write(wb, {bookType:'xlsx', type:'array', cellStyles:true});
+  progress(80);
+
+  // Self-check: read the xlsx back and compare every cell to the original
+  log('  正在自检（回读 xlsx 并逐格比对）...');
+  const check = selfCheck(rowsData, mode, xlsxArray);
+  if(check.fullyOk){
+    log(`✓ 自检通过：${check.checked} 个单元格全部完整，总字符数 ${check.totalChars.toLocaleString()}`, 'ok');
+  } else {
+    log(`✗ 自检发现 ${check.mismatchCount} 处不一致（共检查 ${check.checked} 格）`, 'err');
+  }
+
+  // Stats
+  const stats = {
+    rows: rowsData.length,
+    withScores: withOut,
+    mode,
+    scoreDist: {},
+  };
+  if(mode === 'single'){
+    for(const r of rowsData){
+      const v = r.scores[0] && (r.scores[0].stringValue ?? r.scores[0].value);
+      if(v !== undefined && v !== '') stats.scoreDist[String(v).trim()] = (stats.scoreDist[String(v).trim()] || 0) + 1;
+    }
+  }
+
+  // Pack: always single xlsx, no truncation / no zip fallback
+  const baseName = file.name.replace(/\.jsonl$|\.json$|\.ndjson$/i, '');
+  const blob = new Blob([xlsxArray], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const outName = `${baseName}.xlsx`;
+  progress(100);
+  log(`✓ 完成: ${outName} (${(blob.size/1024).toFixed(1)} KB)`, 'ok');
+  return {blob, outName, stats, check, sourceName: file.name};
+}
+
+// ====== Self-check (read-back integrity) ======
+function buildExpectedAoa(rowsData, mode){
+  if(mode === 'single'){
+    const header = ['序号','datasetItemId','query','baseline_answer','eval_answer','thinking','key_point','score_config','score_value','score_comment'];
+    const aoa = [header];
+    for(const r of rowsData){
+      const s = r.scores[0];
+      aoa.push([
+        r.idx, r.itemId, r.query, r.baseline_answer, r.eval_answer, r.thinking, r.key_point,
+        s ? String(s.name||'').trim() : '',
+        s ? (s.stringValue ?? s.value ?? '') : '',
+        s ? (s.comment ?? '') : ''
+      ]);
+    }
+    return aoa;
+  }
+  const CONFIGS = collectConfigs(rowsData);
+  const header = ['序号','datasetItemId','query','baseline_answer','eval_answer','thinking','key_point'];
+  for(const cfg of CONFIGS){ header.push(`[${cfg}] 分数`); header.push(`[${cfg}] 理由`); }
+  const aoa = [header];
+  for(const r of rowsData){
+    const byName = new Map();
+    for(const s of r.scores){
+      const n = String(s.name||'').trim();
+      if(!byName.has(n)) byName.set(n, s);
+    }
+    const row = [r.idx, r.itemId, r.query, r.baseline_answer, r.eval_answer, r.thinking, r.key_point];
+    for(const cfg of CONFIGS){
+      const s = byName.get(cfg);
+      row.push(s ? (s.stringValue ?? s.value ?? '') : '');
+      row.push(s ? (s.comment ?? '') : '');
+    }
+    aoa.push(row);
+  }
+  return aoa;
+}
+function selfCheck(rowsData, mode, xlsxArray){
+  const wb = XLSX.read(xlsxArray, {type:'array'});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const readback = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+  const expected = buildExpectedAoa(rowsData, mode);
+  const mismatches = [];
+  let checked = 0, totalChars = 0;
+  const rows = expected.length;
+  // row mismatch?
+  const rowCountOk = readback.length === expected.length;
+  for(let r=0; r<rows; r++){
+    const exp = expected[r] || [];
+    const got = readback[r] || [];
+    // column count per row
+    for(let c=0; c<exp.length; c++){
+      checked++;
+      const e = exp[c];
+      const g = got[c];
+      // numeric tolerance
+      if(typeof e === 'number' && typeof g === 'number' && e === g) continue;
+      const eStr = (e === undefined || e === null) ? '' : String(e);
+      const gStr = (g === undefined || g === null) ? '' : String(g);
+      totalChars += eStr.length;
+      if(eStr === gStr) continue;
+      let diff = 0;
+      const minLen = Math.min(eStr.length, gStr.length);
+      while(diff < minLen && eStr.charCodeAt(diff) === gStr.charCodeAt(diff)) diff++;
+      mismatches.push({
+        row: r,
+        col: c,
+        header: String(expected[0][c] || ''),
+        expectedLen: eStr.length,
+        gotLen: gStr.length,
+        firstDiffAt: diff,
+        expectedSample: eStr.slice(Math.max(0, diff-10), diff+40),
+        gotSample: gStr.slice(Math.max(0, diff-10), diff+40),
+      });
+    }
+  }
+  return {
+    checked,
+    totalChars,
+    mismatchCount: mismatches.length,
+    rowCountOk,
+    expectedRows: expected.length - 1,
+    readbackRows: readback.length - 1,
+    mismatches: mismatches.slice(0, 50),
+    mismatchesTotal: mismatches.length,
+    fullyOk: mismatches.length === 0 && rowCountOk,
+  };
+}
+
+// ====== UI wiring ======
+const $ = id => document.getElementById(id);
+const dropzone = $('dropzone');
+const fileInput = $('fileInput');
+const fileListEl = $('fileList');
+const btnConvert = $('btnConvert');
+const btnClear = $('btnClear');
+const logEl = $('log');
+const progressWrap = $('progress');
+const progressBar = $('progressBar');
+const resultSection = $('resultSection');
+const resultsContainer = $('resultsContainer');
+
+let pendingFiles = [];
+
+function renderFiles(){
+  if(!pendingFiles.length){ fileListEl.innerHTML = ''; btnConvert.disabled = true; return; }
+  fileListEl.innerHTML = pendingFiles.map((f,i)=>`
+    <div class="file-row">
+      <div class="ico-file">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      </div>
+      <div>
+        <div class="name">${f.name}</div>
+        <div class="meta">${(f.size/1024).toFixed(1)} KB</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn ghost" data-rm="${i}" title="移除">✕</button>
+    </div>
+  `).join('');
+  btnConvert.disabled = false;
+  fileListEl.querySelectorAll('[data-rm]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      pendingFiles.splice(+b.dataset.rm, 1);
+      renderFiles();
+    });
+  });
+}
+function addFiles(list){
+  for(const f of list){
+    if(!f.name.match(/\.(jsonl|ndjson|json)$/i)){ continue; }
+    if(pendingFiles.some(x => x.name === f.name && x.size === f.size)) continue;
+    pendingFiles.push(f);
+  }
+  renderFiles();
+}
+fileInput.addEventListener('change', e=>{ addFiles(e.target.files); fileInput.value=''; });
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', e=>{ dropzone.classList.remove('drag'); });
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.classList.remove('drag');
+  if(e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+});
+
+btnClear.addEventListener('click', ()=>{
+  pendingFiles = []; renderFiles();
+  logEl.innerHTML = ''; logEl.style.display = 'none';
+  progressWrap.style.display = 'none'; progressBar.style.width = '0';
+  resultSection.classList.remove('show');
+  resultsContainer.innerHTML = '';
+});
+
+function logLine(msg, cls){
+  const d = document.createElement('div');
+  d.className = 'line' + (cls?(' '+cls):'');
+  d.textContent = msg;
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function renderResult(r){
+  const modeLabel = r.stats.mode === 'multi' ? '多配置评测（动态列数）' : '竞技场对比（10 列）';
+  const scoreDistHtml = Object.keys(r.stats.scoreDist).length
+    ? `<div class="stat"><div class="k">Score 分布</div><div class="v" style="font-size:13px">${
+        Object.entries(r.stats.scoreDist).map(([k,v])=>`${k}: ${v}`).join(' · ')
+      }</div></div>` : '';
+  const div = document.createElement('div');
+  div.className = 'result-item';
+  div.innerHTML = `
+    <h4>${r.sourceName}</h4>
+    <div class="stats">
+      <div class="stat"><div class="k">模式</div><div class="v" style="font-size:13px">${modeLabel}</div></div>
+      <div class="stat"><div class="k">总行数</div><div class="v">${r.stats.rows}</div></div>
+      <div class="stat"><div class="k">有分数</div><div class="v ok">${r.stats.withScores}</div></div>
+      <div class="stat"><div class="k">无分数</div><div class="v">${r.stats.rows - r.stats.withScores}</div></div>
+      ${scoreDistHtml}
+    </div>
+    <div class="actions">
+      <button class="btn primary" data-act="download">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        下载 ${r.outName}
+      </button>
+    </div>
+  `;
+  div.querySelector('[data-act="download"]').addEventListener('click', ()=>{
+    const url = URL.createObjectURL(r.blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = r.outName;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 500);
+  });
+  resultsContainer.appendChild(div);
+  resultSection.classList.add('show');
+}
+
+btnConvert.addEventListener('click', async ()=>{
+  if(!pendingFiles.length) return;
+  btnConvert.disabled = true;
+  logEl.innerHTML = ''; logEl.style.display = 'block';
+  resultsContainer.innerHTML = '';
+  resultSection.classList.remove('show');
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0';
+
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const opts = {
+    mode,
+    cleanEval: $('optClean').checked,
+    cleanBaseline: $('optCleanBaseline').checked,
+  };
+
+  const total = pendingFiles.length;
+  for(let i=0;i<pendingFiles.length;i++){
+    const file = pendingFiles[i];
+    logLine(`--- [${i+1}/${total}] ${file.name} ---`);
+    try{
+      const r = await convertOne(
+        file, opts,
+        (msg, cls) => logLine('  ' + msg, cls),
+        (pct) => { progressBar.style.width = ((i*100 + pct)/total) + '%'; }
+      );
+      renderResult(r);
+    } catch(err){
+      console.error(err);
+      logLine('  ✗ 失败: ' + err.message, 'err');
+    }
+  }
+  progressBar.style.width = '100%';
+  setTimeout(()=>{ progressBar.style.width = '0'; progressWrap.style.display = 'none'; }, 800);
+  btnConvert.disabled = pendingFiles.length === 0;
+});
+
 // ====== Tool switch (sidebar nav) ======
 (function(){
   const navs = document.querySelectorAll('.nav-item[data-tool]');
   const sections = document.querySelectorAll('section[id^="tool-"]');
-  const main = document.querySelector('main.main');
   function show(tool){
     navs.forEach(n => {
       if(n.classList.contains('disabled')) return;
       n.classList.toggle('active', n.dataset.tool === tool);
     });
     sections.forEach(s => { s.hidden = s.id !== 'tool-' + tool; });
-    if(main) main.classList.toggle('htmlrun-active', tool === 'htmlrun');
+    // Tools that use a full-height split layout (textarea + preview) need
+    // the page pinned to the viewport — see CSS note near `.md-tool-active`.
+    // Reset scroll before toggling so a leftover scroll position from
+    // another tool doesn't leak in.
+    const pin = tool === 'markdown' || tool === 'htmlrun' || tool === 'latexequ';
+    if(pin){ window.scrollTo(0, 0); }
+    document.documentElement.classList.toggle('md-tool-active', pin);
+    document.body.classList.toggle('md-tool-active', pin);
+    const main = document.querySelector('main.main');
+    if(main) main.classList.toggle('htmlrun-active', tool === 'htmlrun' || tool === 'latexequ');
   }
   navs.forEach(n => {
     n.addEventListener('click', () => {
@@ -200,8 +1130,680 @@
       show(n.dataset.tool);
     });
   });
-  // Show htmlrun by default for this preview
-  show('htmlrun');
+})();
+
+// ====== Markdown 转译 ======
+(function(){
+  if(typeof marked === 'undefined') return;
+
+  const input = document.getElementById('mdInput');
+  const preview = document.getElementById('mdPreview');
+  const statLen = document.getElementById('mdStatLen');
+  const statLine = document.getElementById('mdStatLine');
+  const statWord = document.getElementById('mdStatWord');
+  const optBreaks = document.getElementById('mdOptBreaks');
+  const optSync = document.getElementById('mdOptSync');
+  const optTrans = document.getElementById('mdOptTrans');
+  const transLang = document.getElementById('mdTransLang');
+  const transStatusEl = document.getElementById('mdTransStatus');
+  const transStatusText = transStatusEl.querySelector('.t');
+
+  // Restore translate preference from localStorage
+  try {
+    const savedLang = localStorage.getItem('md_trans_lang');
+    if(savedLang){
+      const opt = Array.from(transLang.options).find(o => o.value === savedLang);
+      if(opt) transLang.value = savedLang;
+    }
+    const savedEnabled = localStorage.getItem('md_trans_enabled');
+    if(savedEnabled === '1') optTrans.checked = true;
+  } catch(e){ /* localStorage may be blocked */ }
+
+  function countWords(s){
+    if(!s) return 0;
+    const ascii = (s.match(/[A-Za-z0-9_]+/g) || []).length;
+    const cjk = (s.match(/[\u4e00-\u9fff]/g) || []).length;
+    return ascii + cjk;
+  }
+
+  // ---- Translation engines (Google primary + MyMemory fallback) + context-aware batching ----
+  //
+  // Why: Markdown like "Tak, **Twoj wynik jest absolutnie poprawny!** target"
+  // renders into three sibling text nodes. Sending each node independently to
+  // Google Translate strips the context, and a bare "Tak, " can be
+  // misidentified as English and mistranslated to "不是". We instead merge
+  // every text node in a block into a single payload with {TXn} placeholders
+  // (which MT engines preserve verbatim), translate once with full context,
+  // then redistribute the pieces back.
+
+  // --- primary engine: Google Translate free gtx endpoint ---
+  async function googleTranslate(text, target, source){
+    if(!text.trim()) return text;
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&dt=t' +
+      '&sl=' + encodeURIComponent(source || 'auto') +
+      '&tl=' + encodeURIComponent(target) +
+      '&q=' + encodeURIComponent(text);
+    const r = await fetch(url, { credentials: 'omit' });
+    if(!r.ok) throw new Error('GT HTTP ' + r.status);
+    const data = await r.json();
+    if(data && Array.isArray(data.sentences)){
+      return data.sentences.map(s => s.trans || '').join('');
+    }
+    if(Array.isArray(data) && Array.isArray(data[0])){
+      return data[0].map(seg => (seg && seg[0]) || '').join('');
+    }
+    throw new Error('GT parse failed');
+  }
+
+  // --- language detection (for fallback engines that need explicit source) ---
+  async function detectLang(text){
+    try {
+      const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&dj=1&dt=ld&sl=auto&tl=en&q=' + encodeURIComponent(text);
+      const r = await fetch(url, { credentials: 'omit' });
+      if(!r.ok) return null;
+      const data = await r.json();
+      if(data && typeof data.src === 'string') return data.src;
+      if(Array.isArray(data)){
+        if(typeof data[2] === 'string' && data[2].length <= 10) return data[2];
+        const last = data[data.length - 1];
+        if(Array.isArray(last) && typeof last[0] === 'string' && last[0].length <= 10) return last[0];
+      }
+    } catch(e){}
+    return null;
+  }
+
+  // --- fallback engine: MyMemory API (no key; ~5000 chars/day/IP) ---
+  async function myMemoryTranslate(text, target, source){
+    if(!text.trim()) return text;
+    let src = source;
+    if(!src || src === 'auto'){
+      src = (await detectLang(text)) || 'en';
+    }
+    const srcTag = (src || 'en').replace('_', '-');
+    const tgtTag = target.replace('_', '-');
+    const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text) +
+      '&langpair=' + encodeURIComponent(srcTag + '|' + tgtTag);
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('MyMemory HTTP ' + r.status);
+    const data = await r.json();
+    if(data && data.responseData && typeof data.responseData.translatedText === 'string'){
+      return data.responseData.translatedText;
+    }
+    throw new Error('MyMemory parse failed');
+  }
+
+  // --- caching ---
+  const transCache = new Map();
+  const CACHE_MAX = 1000;
+  function cacheSet(key, val){
+    transCache.set(key, val);
+    if(transCache.size > CACHE_MAX){
+      transCache.delete(transCache.keys().next().value);
+    }
+  }
+
+  // --- single-string translation with multi-engine fallback (GT x2 -> MyMemory) ---
+  async function translateOne(text, target, source){
+    if(!text) return text;
+    const key = target + '||' + text;
+    if(transCache.has(key)) return transCache.get(key);
+    let lastErr;
+    for(let attempt = 0; attempt < 2; attempt++){
+      try {
+        const out = await googleTranslate(text, target, source);
+        if(typeof out === 'string' && out.length){ cacheSet(key, out); return out; }
+      } catch(e){
+        lastErr = e;
+        await new Promise(rs => setTimeout(rs, 250 + attempt * 400));
+      }
+    }
+    try {
+      const out = await myMemoryTranslate(text, target, source);
+      if(typeof out === 'string' && out.length){ cacheSet(key, out); return out; }
+    } catch(e){ lastErr = e; }
+    throw lastErr || new Error('translate: all engines failed');
+  }
+
+  // Back-compat alias used by older callers.
+  async function translateCached(text, target){
+    return await translateOne(text, target);
+  }
+
+  // --- placeholder-based batching ---
+  // Google & MyMemory both preserve ICU-style {TXn} tokens, which lets us
+  // translate a whole block with surrounding context and then redistribute
+  // the translated pieces back into each text node.
+  function buildPlaceholderPayload(texts){
+    const markers = texts.map((_, i) => '{TX' + i + '}');
+    const payload = texts.map((t, i) => markers[i] + t).join('');
+    return { payload, markers };
+  }
+  function splitByPlaceholders(translated, n){
+    const segs = new Array(n).fill(null);
+    const re = /\{\s*TX\s*(\d+)\s*\}/g;
+    let lastIdx = -1, lastPos = 0, m;
+    while((m = re.exec(translated))){
+      const idx = parseInt(m[1], 10);
+      if(idx < 0 || idx >= n) continue;
+      if(lastIdx >= 0) segs[lastIdx] = translated.slice(lastPos, m.index);
+      lastIdx = idx;
+      lastPos = re.lastIndex;
+    }
+    if(lastIdx >= 0) segs[lastIdx] = translated.slice(lastPos);
+    return segs;
+  }
+
+  // Translate an array of texts as one contextualised batch; fall back to
+  // per-item on failure so a flaky batch never loses an entire block.
+  async function translateBatch(texts, target, source){
+    if(!texts.length) return [];
+    if(texts.length === 1){
+      try { return [await translateOne(texts[0], target, source)]; }
+      catch(e){ return [texts[0]]; }
+    }
+    const BATCH_LIMIT = 3500;
+    const approxSize = texts.reduce((a, t, i) => a + t.length + ('{TX' + i + '}').length, 0);
+    if(approxSize > BATCH_LIMIT){
+      const chunks = [];
+      let cur = [], curSize = 0, start = 0;
+      texts.forEach((t, i) => {
+        const size = ('{TX' + i + '}').length + t.length;
+        if(curSize + size > BATCH_LIMIT && cur.length){
+          chunks.push({ start, texts: cur });
+          start = i;
+          cur = [];
+          curSize = 0;
+        }
+        cur.push(t);
+        curSize += size;
+      });
+      if(cur.length) chunks.push({ start, texts: cur });
+      const out = new Array(texts.length).fill(null);
+      for(const c of chunks){
+        const translated = await translateBatch(c.texts, target, source);
+        translated.forEach((v, k) => { out[c.start + k] = v; });
+      }
+      return out;
+    }
+    const { payload } = buildPlaceholderPayload(texts);
+    try {
+      const translated = await translateOne(payload, target, source);
+      const segs = splitByPlaceholders(translated, texts.length);
+      const missing = [];
+      segs.forEach((s, i) => { if(s == null) missing.push(i); });
+      if(!missing.length) return segs;
+      // Some placeholders were swallowed by the engine; retry just those.
+      for(const i of missing){
+        try { segs[i] = await translateOne(texts[i], target, source); }
+        catch(e){ segs[i] = texts[i]; }
+      }
+      return segs;
+    } catch(e){
+      const out = [];
+      for(const t of texts){
+        try { out.push(await translateOne(t, target, source)); }
+        catch(e2){ out.push(t); }
+      }
+      return out;
+    }
+  }
+
+  // --- Smart-skip: mark "extracted / identified" values so they aren't translated ---
+  // Cue phrases that imply the quoted tokens are literal extracted/identified values
+  const NT_CUE_RE = /(?:识别|提取|抽取|检测|OCR|文字识别|图像识别|推理|解析|得出|判定|判断|标注|匹配到|命中|抽出|命名实体|关键词|原文|字段|输出结果?|识别结果?|提取结果?)|(?:\b(?:extracted|identified|recognized|detected|parsed|matched|named\s+entity|ocr|keyword|field|output)\b)/iu;
+  // Quoted segments — paired ASCII + CJK quotes + brackets
+  const NT_QUOTE_RE = /"[^"\n]{1,200}?"|'[^'\n]{1,200}?'|\u201C[^\u201D\n]{1,200}?\u201D|\u2018[^\u2019\n]{1,200}?\u2019|\u300C[^\u300D\n]{1,200}?\u300D|\u300E[^\u300F\n]{1,200}?\u300F|\u3010[^\u3011\n]{1,200}?\u3011/g;
+
+  // Walk blocks; if a block's text contains a cue, wrap each quoted segment in <span class="notrans">
+  function markNonTranslatables(root){
+    const blocks = root.querySelectorAll('p, li, td, th, dt, dd, blockquote, h1, h2, h3, h4, h5, h6');
+    blocks.forEach(block => {
+      if(!NT_CUE_RE.test(block.textContent)) return;
+      // Gather candidate text nodes within this block (skip code/pre/already-notrans)
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+        acceptNode(node){
+          if(!node.textContent) return NodeFilter.FILTER_REJECT;
+          let p = node.parentElement;
+          while(p && p !== block){
+            const tn = p.tagName;
+            if(tn === 'CODE' || tn === 'PRE' || tn === 'SCRIPT' || tn === 'STYLE') return NodeFilter.FILTER_REJECT;
+            if(p.classList){
+              if(p.classList.contains('notrans')) return NodeFilter.FILTER_REJECT;
+              if(p.classList.contains('katex')) return NodeFilter.FILTER_REJECT;
+              if(p.classList.contains('katex-display')) return NodeFilter.FILTER_REJECT;
+            }
+            p = p.parentElement;
+          }
+          // Quick early-reject: text must contain at least one quote delimiter
+          return /[\u2018\u2019\u201C\u201D\u300C\u300D\u300E\u300F\u3010\u3011"']/.test(node.textContent)
+            ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      });
+      const targets = [];
+      let n;
+      while((n = walker.nextNode())) targets.push(n);
+
+      targets.forEach(node => {
+        const text = node.textContent;
+        const frag = document.createDocumentFragment();
+        let pos = 0;
+        let m;
+        const re = new RegExp(NT_QUOTE_RE.source, 'gu');
+        let hit = false;
+        while((m = re.exec(text))){
+          hit = true;
+          if(m.index > pos){
+            frag.appendChild(document.createTextNode(text.slice(pos, m.index)));
+          }
+          const span = document.createElement('span');
+          span.className = 'notrans';
+          span.textContent = m[0];
+          frag.appendChild(span);
+          pos = m.index + m[0].length;
+        }
+        if(!hit) return;
+        if(pos < text.length){
+          frag.appendChild(document.createTextNode(text.slice(pos)));
+        }
+        node.parentNode.replaceChild(frag, node);
+      });
+    });
+  }
+
+  // Walk preview DOM, translate text nodes in place.
+  // Text nodes in the same block are merged into a single context-aware
+  // request (with {TXn} placeholders) so short fragments like "Tak, " no
+  // longer lose their context and get misidentified by the engine.
+  // cancelled() returns true -> abort mid-way.
+  async function translatePreview(target, cancelled){
+    markNonTranslatables(preview);
+
+    const SKIP_TAGS = new Set(['CODE', 'PRE', 'SCRIPT', 'STYLE', 'KBD', 'SAMP']);
+    const isSkipped = (node, stopAt) => {
+      let p = node.parentElement;
+      while(p && p !== stopAt){
+        if(SKIP_TAGS.has(p.tagName)) return true;
+        if(p.classList && (
+          p.classList.contains('notrans') ||
+          p.classList.contains('katex') ||
+          p.classList.contains('katex-display')
+        )) return true;
+        p = p.parentElement;
+      }
+      return false;
+    };
+
+    // Pick innermost block-level containers so text inside them is
+    // translated with its full context (e.g. we pick a <li>'s contents
+    // instead of the <ul>'s flattened text).
+    const BLOCK_SELECTOR = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, dt, dd, figcaption, caption, summary';
+    let blocks = Array.from(preview.querySelectorAll(BLOCK_SELECTOR)).filter(b => {
+      let p = b.parentElement;
+      while(p && p !== preview){
+        if(p.matches && p.matches(BLOCK_SELECTOR)) return false;
+        p = p.parentElement;
+      }
+      return true;
+    });
+    if(!blocks.length) blocks = [preview];
+
+    // Collect text nodes per block.
+    const plans = [];
+    blocks.forEach(block => {
+      const nodes = [];
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+        acceptNode(node){
+          if(!node.textContent || !node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+          if(isSkipped(node, block)) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      });
+      let n;
+      while((n = walker.nextNode())) nodes.push(n);
+      if(nodes.length) plans.push({ block, nodes });
+    });
+
+    const totalNodes = plans.reduce((a, p) => a + p.nodes.length, 0);
+    if(!totalNodes) return { total: 0, done: 0 };
+
+    const BLOCK_CONCURRENCY = 4;
+    let done = 0;
+    for(let i = 0; i < plans.length; i += BLOCK_CONCURRENCY){
+      if(cancelled && cancelled()) return { total: totalNodes, done, cancelled: true };
+      const batch = plans.slice(i, i + BLOCK_CONCURRENCY);
+      await Promise.all(batch.map(async plan => {
+        try {
+          const texts = plan.nodes.map(n => n.textContent);
+          const translated = await translateBatch(texts, target);
+          if(cancelled && cancelled()) return;
+          plan.nodes.forEach((node, idx) => {
+            const v = translated[idx];
+            if(typeof v === 'string' && v.length){
+              node.textContent = v;
+            }
+          });
+        } catch(e){ /* keep originals */ }
+        done += plan.nodes.length;
+        if(!(cancelled && cancelled())){
+          showTransStatus('翻译中 · ' + done + '/' + totalNodes, 'busy');
+        }
+      }));
+    }
+    return { total: totalNodes, done };
+  }
+
+  function showTransStatus(text, kind){
+    transStatusEl.hidden = false;
+    transStatusEl.className = 'md-trans-status' + (kind ? (' ' + kind) : '');
+    transStatusText.textContent = text;
+  }
+  function hideTransStatus(){
+    transStatusEl.hidden = true;
+  }
+
+  // Debounced translate trigger, with cancellation token
+  let transSeq = 0;
+  let transDebounceId = null;
+  function scheduleTranslate(delay){
+    clearTimeout(transDebounceId);
+    const mySeq = ++transSeq;
+    transDebounceId = setTimeout(() => runTranslate(mySeq), delay == null ? 800 : delay);
+  }
+  async function runTranslate(mySeq){
+    if(!optTrans.checked) return;
+    const target = transLang.value;
+    showTransStatus('翻译中…', 'busy');
+    try {
+      const res = await translatePreview(target, () => mySeq !== transSeq);
+      if(mySeq !== transSeq) return; // superseded
+      if(res.cancelled){ return; }
+      showTransStatus(`已翻译 ${res.done} 段 → ${target}`, 'ok');
+      setTimeout(() => { if(transSeq === mySeq) hideTransStatus(); }, 2000);
+    } catch(e){
+      if(mySeq !== transSeq) return;
+      showTransStatus('翻译失败: ' + (e.message || e), 'err');
+    }
+  }
+
+  function render(){
+    const src = input.value || '';
+    marked.setOptions({ gfm: true, breaks: optBreaks.checked });
+    try { preview.innerHTML = marked.parse(src); }
+    catch(e){ preview.innerHTML = '<p style="color:var(--danger)">渲染失败: ' + (e.message || e) + '</p>'; }
+    // LaTeX math rendering (KaTeX auto-render). Safe if script failed to load.
+    if(typeof window.renderMathInElement === 'function'){
+      try {
+        window.renderMathInElement(preview, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '$', right: '$', display: false }
+          ],
+          ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          ignoredClasses: ['notrans'],
+          throwOnError: false,
+          errorColor: '#ff6b7a'
+        });
+      } catch(e){ /* ignore math render errors */ }
+    }
+    statLen.textContent = src.length + ' 字符';
+    statLine.textContent = (src ? src.split(/\r?\n/).length : 0) + ' 行';
+    statWord.textContent = countWords(src) + ' 词';
+    // Auto-trigger translation if enabled
+    if(optTrans.checked){
+      scheduleTranslate();
+    } else {
+      // Cancel any pending translation
+      transSeq++;
+      clearTimeout(transDebounceId);
+      hideTransStatus();
+    }
+  }
+  input.addEventListener('input', render);
+  optBreaks.addEventListener('change', render);
+
+  // Translation controls
+  optTrans.addEventListener('change', () => {
+    try { localStorage.setItem('md_trans_enabled', optTrans.checked ? '1' : '0'); } catch(e){}
+    if(optTrans.checked){
+      // Fresh render first (preview may currently be showing translated content)
+      render();
+      scheduleTranslate(100); // near-immediate on toggle
+    } else {
+      render(); // re-render to show original
+    }
+  });
+  transLang.addEventListener('change', () => {
+    try { localStorage.setItem('md_trans_lang', transLang.value); } catch(e){}
+    if(optTrans.checked){
+      render();
+      scheduleTranslate(100);
+    }
+  });
+
+  // Bi-directional scroll sync
+  let syncing = false;
+  function bindSync(a, b){
+    a.addEventListener('scroll', () => {
+      if(!optSync.checked || syncing) return;
+      const aMax = Math.max(1, a.scrollHeight - a.clientHeight);
+      const bMax = Math.max(0, b.scrollHeight - b.clientHeight);
+      if(aMax === 0 || bMax === 0) return;
+      syncing = true;
+      b.scrollTop = (a.scrollTop / aMax) * bMax;
+      requestAnimationFrame(() => { syncing = false; });
+    });
+  }
+  bindSync(input, preview);
+  bindSync(preview, input);
+
+  // Support Tab key in textarea (insert 2 spaces instead of switching focus)
+  input.addEventListener('keydown', e => {
+    if(e.key === 'Tab' && !e.shiftKey){
+      e.preventDefault();
+      const start = input.selectionStart, end = input.selectionEnd;
+      input.value = input.value.substring(0, start) + '  ' + input.value.substring(end);
+      input.selectionStart = input.selectionEnd = start + 2;
+      render();
+    }
+  });
+
+  // After paste, jump to top-left of content (not the end of the pasted text)
+  input.addEventListener('paste', () => {
+    // Defer to next tick so the paste has completed and value updated
+    requestAnimationFrame(() => {
+      input.scrollTop = 0;
+      input.scrollLeft = 0;
+      input.selectionStart = input.selectionEnd = 0;
+      render();
+      requestAnimationFrame(() => {
+        // Re-assert scroll after render (some browsers restore cursor scroll)
+        input.scrollTop = 0;
+        input.scrollLeft = 0;
+        preview.scrollTop = 0;
+      });
+    });
+  });
+
+  // Toolbar buttons
+  document.getElementById('mdBtnSample').addEventListener('click', () => {
+    input.value = SAMPLE_MD;
+    render();
+    input.focus();
+    input.scrollTop = 0;
+    preview.scrollTop = 0;
+  });
+  document.getElementById('mdBtnClear').addEventListener('click', () => {
+    input.value = '';
+    render();
+    input.focus();
+  });
+  document.getElementById('mdBtnCopyHtml').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(preview.innerHTML);
+      toast('✓ HTML 片段已复制到剪贴板');
+    } catch(e){
+      toast('复制失败: ' + e.message, 'err');
+    }
+  });
+  document.getElementById('mdBtnDownloadMd').addEventListener('click', () => {
+    if(!input.value.trim()){ toast('内容为空,无法下载', 'err'); return; }
+    download(input.value, suggestFilename('md'), 'text/markdown;charset=utf-8');
+  });
+  document.getElementById('mdBtnDownloadHtml').addEventListener('click', () => {
+    if(!input.value.trim()){ toast('内容为空,无法下载', 'err'); return; }
+    download(buildFullHtml(preview.innerHTML, input.value), suggestFilename('html'), 'text/html;charset=utf-8');
+  });
+
+  function download(text, filename, type){
+    const blob = new Blob([text], {type});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 300);
+  }
+
+  function suggestFilename(ext){
+    // Use first H1 line of markdown, or fallback
+    const m = (input.value.match(/^#\s+(.+?)\s*$/m));
+    const base = m ? m[1].replace(/[\\/:*?"<>|]/g, '').slice(0, 40).trim() : 'markdown';
+    const ts = new Date().toISOString().slice(0, 10);
+    return `${base || 'markdown'}_${ts}.${ext}`;
+  }
+
+  function buildFullHtml(bodyHtml, mdSource){
+    const title = (mdSource.match(/^#\s+(.+?)\s*$/m) || [,'Markdown 导出'])[1];
+    return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;max-width:860px;margin:40px auto;padding:0 20px;color:#1b2030;line-height:1.75;font-size:15px}
+h1,h2,h3,h4,h5,h6{line-height:1.3;font-weight:600;margin:22px 0 10px}
+h1{font-size:26px;border-bottom:1px solid #e3e7f1;padding-bottom:8px}
+h2{font-size:20px;border-bottom:1px solid #e3e7f1;padding-bottom:6px}
+h3{font-size:17px}
+p{margin:10px 0}
+ul,ol{padding-left:28px;margin:10px 0}
+li{margin:4px 0}
+a{color:#3e63dd}
+code{background:#f1f4fb;padding:2px 7px;border-radius:4px;font-size:90%;color:#c64545;font-family:"JetBrains Mono",Consolas,Menlo,monospace}
+pre{background:#f6f7fb;border:1px solid #e3e7f1;border-radius:8px;padding:14px 16px;overflow:auto;margin:12px 0}
+pre code{background:none;padding:0;color:#1b2030}
+blockquote{border-left:3px solid #3e63dd;padding:6px 14px;color:#52607a;background:#f0f4ff;border-radius:0 6px 6px 0;margin:12px 0}
+table{border-collapse:collapse;margin:12px 0}
+th,td{border:1px solid #d1d7e5;padding:7px 12px;text-align:left;vertical-align:top}
+th{background:#eceff7}
+img{max-width:100%;border-radius:6px}
+hr{border:none;border-top:1px solid #e3e7f1;margin:16px 0}
+del{color:#8a93a8}
+</style>
+</head>
+<body>
+${bodyHtml}
+</body>
+</html>`;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function toast(msg, kind){
+    const el = document.createElement('div');
+    el.className = 'toast' + (kind === 'err' ? ' err' : '');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; }, 1500);
+    setTimeout(() => el.remove(), 1900);
+  }
+
+  const SAMPLE_MD = `# Markdown 转译示例
+
+这是一个 **Markdown 编辑器** 预览工具。左侧编辑、右侧实时渲染,所有处理都在浏览器本地完成。
+
+## 基础语法
+
+- *斜体* / **粗体** / ~~删除线~~ / \`行内代码\`
+- [超链接](https://github.com/ToGouEre/Tools)
+- 快捷键提示:<kbd>Ctrl</kbd> + <kbd>C</kbd>
+
+## 任务列表
+
+- [x] 加一个 Markdown 编辑器
+- [x] 支持实时预览 + 滚动同步
+- [ ] 加一键导出 PDF
+- [ ] 夜间主题切换
+
+## 代码块
+
+\`\`\`js
+// JavaScript 高亮(样式)
+function greet(name){
+  return \`Hello, \${name}!\`;
+}
+console.log(greet('Markdown'));
+\`\`\`
+
+## 引用
+
+> "完美不是无可再加,而是无可再减。"
+>
+> —— 圣埃克苏佩里
+
+## 表格
+
+| 功能 | 状态 | 说明 |
+|---|:---:|---|
+| 实时预览 | ✅ | 输入即渲染 |
+| 滚动同步 | ✅ | 双向联动 |
+| 导出 HTML | ✅ | 含内置样式 |
+| 导出 PDF | 🚧 | TODO |
+
+## 嵌套列表
+
+1. 第一步
+   - 先把原文写进左边
+   - 右边自动渲染
+2. 第二步
+   - 看看效果
+   - 不对的地方再改
+
+## 数学公式(LaTeX)
+
+行内公式:欧拉恒等式 $e^{i\\pi} + 1 = 0$,勾股定理 $a^2 + b^2 = c^2$。
+
+块级公式:
+
+$$\\left(u + x\\frac{du}{dx} - u\\right) \\arctan u = 1$$
+
+矩阵与求和:
+
+$$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}$$
+
+---
+
+*祝你写得开心 ✍️*
+`;
+
+  // Initial render (empty by default so user sees the placeholder;
+  // click "插入示例" to load the sample)
+  render();
+  // If KaTeX/auto-render hasn't finished loading yet (defer scripts run after
+  // this inline script), re-render once it's ready so any pre-filled math renders.
+  if(typeof window.renderMathInElement !== 'function'){
+    const reRun = () => { if(input.value && input.value.indexOf('$') !== -1) render(); };
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', reRun, { once: true });
+    } else {
+      setTimeout(reRun, 200);
+    }
+  }
 })();
 
 // ====== HTML 在线运行 ======
@@ -214,17 +1816,15 @@
   const preview = document.getElementById('htmlPreview');
   const btnToggle = document.getElementById('htmlBtnTogglePreview');
   const split = document.getElementById('htmlrunSplit');
-  const card = document.querySelector('.card.htmlrun-card');
   if(!input) return;
 
-  // Live preview into iframe via blob URL (scripts run properly)
+  // Live preview into iframe
   function updatePreview(){
     if(!preview || split.classList.contains('collapsed')) return;
     const code = input.value || '';
     const blob = new Blob([code], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     preview.src = url;
-    // revoke after a delay to avoid breaking the loaded page
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
@@ -296,6 +1896,7 @@
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
     if(!w){ updateStatus('弹窗被浏览器拦截了，请允许弹出窗口', true); return; }
+    // Revoke after the new tab has had a chance to load
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
@@ -311,6 +1912,7 @@
     }
   }
 
+  // Wire up
   input.addEventListener('input', () => {
     updateStatus();
     clearTimeout(previewDebounce);
@@ -330,6 +1932,7 @@
     updatePreview();
   });
 
+  // Keyboard: Ctrl/Cmd+Enter → run in new window
   input.addEventListener('keydown', (e) => {
     if((e.ctrlKey || e.metaKey) && e.key === 'Enter'){
       e.preventDefault();
@@ -337,7 +1940,142 @@
     }
   });
 
+  // Init
   updateStatus();
+})();
+
+// ====== LaTeX 公式 ======
+(function(){
+  const input = document.getElementById('ltxeInput');
+  const render = document.getElementById('ltxeRender');
+  const palette = document.getElementById('ltxePalette');
+  const btnClear = document.getElementById('ltxeBtnClear');
+  const btnCopy = document.getElementById('ltxeBtnCopy');
+  const stat = document.getElementById('ltxeStat');
+  if(!input) return;
+
+  const CATS = [
+    {name:'常用符号', ico:'+ × ÷', items:[{t:'+',v:'+'},{t:'−',v:'-'},{t:'×',v:'\\times'},{t:'÷',v:'\\div'},{t:'=',v:'='},{t:'≠',v:'\\neq'},{t:'≈',v:'\\approx'},{t:'<',v:'<'},{t:'>',v:'>'},{t:'≤',v:'\\leq'},{t:'≥',v:'\\geq'},{t:'±',v:'\\pm'},{t:'∓',v:'\\mp'},{t:'·',v:'\\cdot'},{t:'⋯',v:'\\cdots'},{t:'…',v:'\\ldots'},{t:'∴',v:'\\therefore'},{t:'∵',v:'\\because'},{t:'∞',v:'\\infty'},{t:'∂',v:'\\partial'},{t:'∇',v:'\\nabla'},{t:'∀',v:'\\forall'},{t:'∃',v:'\\exists'},{t:'∅',v:'\\emptyset'},{t:'∈',v:'\\in'},{t:'∉',v:'\\notin'},{t:'∋',v:'\\ni'},{t:'⊂',v:'\\subset'},{t:'⊃',v:'\\supset'},{t:'⊆',v:'\\subseteq'},{t:'⊇',v:'\\supseteq'},{t:'∪',v:'\\cup'},{t:'∩',v:'\\cap'},{t:'⊕',v:'\\oplus'},{t:'⊗',v:'\\otimes'},{t:'∠',v:'\\angle'},{t:'⊥',v:'\\perp'},{t:'∥',v:'\\parallel'},{t:'≡',v:'\\equiv'},{t:'≅',v:'\\cong'}]},
+    {name:'希腊字母', ico:'α β', items:[{t:'α',v:'\\alpha'},{t:'β',v:'\\beta'},{t:'γ',v:'\\gamma'},{t:'δ',v:'\\delta'},{t:'ε',v:'\\varepsilon'},{t:'ζ',v:'\\zeta'},{t:'η',v:'\\eta'},{t:'θ',v:'\\theta'},{t:'ι',v:'\\iota'},{t:'κ',v:'\\kappa'},{t:'λ',v:'\\lambda'},{t:'μ',v:'\\mu'},{t:'ν',v:'\\nu'},{t:'ξ',v:'\\xi'},{t:'π',v:'\\pi'},{t:'ρ',v:'\\rho'},{t:'σ',v:'\\sigma'},{t:'τ',v:'\\tau'},{t:'υ',v:'\\upsilon'},{t:'φ',v:'\\varphi'},{t:'χ',v:'\\chi'},{t:'ψ',v:'\\psi'},{t:'ω',v:'\\omega'},{t:'Γ',v:'\\Gamma'},{t:'Δ',v:'\\Delta'},{t:'Θ',v:'\\Theta'},{t:'Λ',v:'\\Lambda'},{t:'Π',v:'\\Pi'},{t:'Σ',v:'\\Sigma'},{t:'Φ',v:'\\Phi'},{t:'Ψ',v:'\\Psi'},{t:'Ω',v:'\\Omega'}]},
+    {name:'分数微分', ico:'x/y', items:[{t:'\\frac',v:'\\frac{}{}'},{t:'\\dfrac',v:'\\dfrac{}{}'},{t:'\\tfrac',v:'\\tfrac{}{}'},{t:'\\cfrac',v:'\\cfrac{}{}'},{t:'dy/dx',v:'\\frac{dy}{dx}'},{t:'∂y/∂x',v:'\\frac{\\partial y}{\\partial x}'},{t:'d²y/dx²',v:'\\frac{d^2y}{dx^2}'},{t:'∂²/∂x²',v:'\\frac{\\partial^2}{\\partial x^2}'},{t:'\\binom',v:'\\binom{}{}'},{t:'\\dbinom',v:'\\dbinom{}{}'}]},
+    {name:'根式角标', ico:'√eˣ', items:[{t:'√a',v:'\\sqrt{}'},{t:'\\sqrt[n]',v:'\\sqrt[]{}'},{t:'xⁿ',v:'^{}'},{t:'xₙ',v:'_{}'},{t:'xᵢʲ',v:'_{}^{}'},{t:'\\overline',v:'\\overline{}'},{t:'\\underline',v:'\\underline{}'},{t:'\\hat',v:'\\hat{}'},{t:'\\vec',v:'\\vec{}'},{t:'\\dot',v:'\\dot{}'},{t:'\\ddot',v:'\\ddot{}'},{t:'\\bar',v:'\\bar{}'},{t:'\\tilde',v:'\\tilde{}'},{t:'\\widehat',v:'\\widehat{}'},{t:'\\overbrace',v:'\\overbrace{}^{}'},{t:'\\underbrace',v:'\\underbrace{}_{}'}]},
+    {name:'极限对数', ico:'lim', items:[{t:'\\lim',v:'\\lim_{x \\to \\infty}'},{t:'\\lim₀',v:'\\lim_{x \\to 0}'},{t:'\\limₙ',v:'\\lim_{n \\to \\infty}'},{t:'\\log',v:'\\log'},{t:'\\ln',v:'\\ln'},{t:'\\lg',v:'\\lg'},{t:'\\logₙ',v:'\\log_{}'},{t:'\\exp',v:'\\exp'},{t:'\\max',v:'\\max'},{t:'\\min',v:'\\min'},{t:'\\sup',v:'\\sup'},{t:'\\inf',v:'\\inf'}]},
+    {name:'三角函数', ico:'sin', items:[{t:'\\sin',v:'\\sin'},{t:'\\cos',v:'\\cos'},{t:'\\tan',v:'\\tan'},{t:'\\cot',v:'\\cot'},{t:'\\sec',v:'\\sec'},{t:'\\csc',v:'\\csc'},{t:'\\arcsin',v:'\\arcsin'},{t:'\\arccos',v:'\\arccos'},{t:'\\arctan',v:'\\arctan'},{t:'\\sinh',v:'\\sinh'},{t:'\\cosh',v:'\\cosh'},{t:'\\tanh',v:'\\tanh'},{t:'\\coth',v:'\\coth'}]},
+    {name:'积分运算', ico:'∫', items:[{t:'∫',v:'\\int'},{t:'∫ₐᵇ',v:'\\int_{}^{}'},{t:'∬',v:'\\iint'},{t:'∭',v:'\\iiint'},{t:'∮',v:'\\oint'},{t:'∯',v:'\\oiint'},{t:'∰',v:'\\oiiint'},{t:'∫ₐᵇf(x)dx',v:'\\int_{a}^{b} f(x)\\,dx'},{t:'dx',v:'\\,dx'},{t:'dy',v:'\\,dy'},{t:'dz',v:'\\,dz'},{t:'dt',v:'\\,dt'}]},
+    {name:'大型运算', ico:'∑', items:[{t:'∑',v:'\\sum_{i=1}^{n}'},{t:'∏',v:'\\prod_{i=1}^{n}'},{t:'⋃',v:'\\bigcup_{i=1}^{n}'},{t:'⋂',v:'\\bigcap_{i=1}^{n}'},{t:'⋁',v:'\\bigvee_{i=1}^{n}'},{t:'⋀',v:'\\bigwedge_{i=1}^{n}'},{t:'⨁',v:'\\bigoplus_{i=1}^{n}'},{t:'⨂',v:'\\bigotimes_{i=1}^{n}'},{t:'∐',v:'\\coprod_{i=1}^{n}'}]},
+    {name:'括号取整', ico:'{[(', items:[{t:'( )',v:'\\left( \\right)'},{t:'[ ]',v:'\\left[ \\right]'},{t:'{ }',v:'\\left\\{ \\right\\}'},{t:'| |',v:'\\left| \\right|'},{t:'‖ ‖',v:'\\left\\| \\right\\|'},{t:'⌊ ⌋',v:'\\left\\lfloor \\right\\rfloor'},{t:'⌈ ⌉',v:'\\left\\lceil \\right\\rceil'},{t:'〈 〉',v:'\\langle \\rangle'},{t:'\\binom',v:'\\binom{}{}'},{t:'\\tbinom',v:'\\tbinom{}{}'}]},
+    {name:'数组矩阵', ico:'[0 1]', items:[{t:'matrix',v:'\\begin{matrix} \\end{matrix}'},{t:'pmatrix',v:'\\begin{pmatrix} \\end{pmatrix}'},{t:'bmatrix',v:'\\begin{bmatrix} \\end{bmatrix}'},{t:'vmatrix',v:'\\begin{vmatrix} \\end{vmatrix}'},{t:'Vmatrix',v:'\\begin{Vmatrix} \\end{Vmatrix}'},{t:'array',v:'\\begin{array}{c} \\end{array}'},{t:'aligned',v:'\\begin{aligned} \\end{aligned}'},{t:'cases',v:'\\begin{cases} \\end{cases}'}]},
+  ];
+
+  let activeCat = 0;
+  let symPanel = null;
+
+  function buildPalette(){
+    palette.innerHTML = '';
+    CATS.forEach((c,i) => {
+      const card = document.createElement('div');
+      card.className = 'cat-card' + (i === activeCat ? ' active' : '');
+      card.innerHTML = '<div class="cat-ico">' + c.ico.replace(/</g,'&lt;') + '</div><div class="cat-name">' + c.name + '</div>';
+      card.addEventListener('click', () => { activeCat = i; buildPalette(); buildSymbols(); });
+      palette.appendChild(card);
+    });
+    buildSymbols();
+  }
+
+  function buildSymbols(){
+    if(!symPanel){
+      symPanel = document.createElement('div');
+      symPanel.className = 'ltxe-symbols';
+      palette.parentNode.insertBefore(symPanel, palette.nextSibling);
+    }
+    symPanel.innerHTML = '';
+    const g = CATS[activeCat];
+    if(!g) return;
+    g.items.forEach(it => {
+      const b = document.createElement('button');
+      b.className = 'sym-btn';
+      b.textContent = it.t;
+      b.title = it.v;
+      b.addEventListener('click', () => insertAtCursor(it.v));
+      symPanel.appendChild(b);
+    });
+  }
+
+  function insertAtCursor(text){
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const val = input.value;
+    input.value = val.slice(0, start) + text + val.slice(end);
+    input.selectionStart = input.selectionEnd = start + text.length;
+    input.focus();
+    doRender();
+    updateStat();
+  }
+
+  function doRender(){
+    if(!render) return;
+    const code = input.value.trim();
+    if(!code){
+      render.innerHTML = '<span style="color:#aaa;font-size:13px">预览区域</span>';
+      return;
+    }
+    try {
+      if(typeof katex === 'undefined'){
+        render.innerHTML = '<span style="color:#ff6b7a;font-size:13px">KaTeX 尚未加载，请稍候 …</span>';
+        return;
+      }
+      katex.render(code, render, { throwOnError: false, displayMode: true, errorColor: '#ff6b7a' });
+    } catch(e){
+      render.innerHTML = '<span style="color:#ff6b7a;font-size:13px">' + (e.message || '渲染出错') + '</span>';
+    }
+  }
+
+  function updateStat(){
+    stat.textContent = input.value.length.toLocaleString() + ' 字符';
+  }
+
+  let debounce;
+  input.addEventListener('input', () => {
+    updateStat();
+    clearTimeout(debounce);
+    debounce = setTimeout(doRender, 200);
+  });
+
+  btnClear.addEventListener('click', () => {
+    input.value = '';
+    updateStat();
+    doRender();
+    input.focus();
+  });
+
+  btnCopy.addEventListener('click', async () => {
+    const code = input.value;
+    if(!code){ stat.textContent = '无内容可复制'; setTimeout(updateStat, 1500); return; }
+    try {
+      await navigator.clipboard.writeText(code);
+      stat.textContent = '已复制到剪贴板';
+      setTimeout(updateStat, 1500);
+    } catch(e){
+      input.select(); document.execCommand('copy');
+      stat.textContent = '已复制';
+      setTimeout(updateStat, 1500);
+    }
+    input.focus();
+  });
+
+  // Wait for KaTeX then init
+  function waitKatex(cb){
+    if(typeof katex !== 'undefined') return cb();
+    let tries = 0;
+    const iv = setInterval(() => {
+      if(typeof katex !== 'undefined'){ clearInterval(iv); cb(); }
+      else if(++tries > 50){ clearInterval(iv); }
+    }, 200);
+  }
+
+  buildPalette();
+  updateStat();
+  waitKatex(doRender);
 })();
 </script>
 </body>
