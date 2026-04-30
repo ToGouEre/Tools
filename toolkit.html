@@ -1635,7 +1635,6 @@ btnConvert.addEventListener('click', async ()=>{
     preview.scrollTop = 0;
   });
   document.getElementById('mdBtnClear').addEventListener('click', () => {
-    if(input.value && !confirm('确定要清空当前内容吗？')) return;
     input.value = '';
     render();
     input.focus();
