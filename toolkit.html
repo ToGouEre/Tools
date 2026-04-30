@@ -286,6 +286,15 @@
 
   .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--panel);color:var(--text);padding:10px 20px;border-radius:999px;border:1px solid var(--border);font-size:12.5px;z-index:9999;box-shadow:var(--shadow);transition:opacity .3s ease}
   .toast.err{border-color:var(--danger);color:var(--danger)}
+
+  /* ===== Markdown 清空确认弹窗 ===== */
+  .md-confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+  .md-confirm-box{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:24px 28px;min-width:320px;max-width:90vw;box-shadow:var(--shadow)}
+  .md-confirm-box p{margin:0 0 16px;font-size:14px;color:var(--text)}
+  .md-confirm-box .md-confirm-opt{display:flex;align-items:center;gap:8px;margin:0 0 18px;font-size:12.5px;color:var(--text-dim);cursor:pointer;user-select:none}
+  .md-confirm-box .md-confirm-opt input{accent-color:var(--accent);margin:0}
+  .md-confirm-actions{display:flex;gap:10px;justify-content:flex-end}
+  .md-confirm-actions .btn{padding:8px 18px;font-size:13px}
 </style>
 </head>
 <body>
@@ -467,7 +476,6 @@
             插入示例
           </button>
           <button class="btn ghost" id="mdBtnClear">清空</button>
-          <label class="md-opt"><input type="checkbox" id="mdOptNoConfirm">以后不再提醒</label>
           <label class="md-opt"><input type="checkbox" id="mdOptBreaks" checked>单行回车即换行</label>
           <label class="md-opt"><input type="checkbox" id="mdOptSync" checked>滚动同步</label>
           <label class="md-opt md-trans-toggle"><input type="checkbox" id="mdOptTrans">翻译为</label>
@@ -1635,23 +1643,51 @@ btnConvert.addEventListener('click', async ()=>{
     input.scrollTop = 0;
     preview.scrollTop = 0;
   });
-  const mdOptNoConfirm = document.getElementById('mdOptNoConfirm');
-  if(mdOptNoConfirm){
-    try { mdOptNoConfirm.checked = localStorage.getItem('md_no_confirm_clear') === '1'; } catch(e){}
+
+  /* Markdown 清空确认弹窗 */
+  const mdConfirmOverlay = document.getElementById('mdConfirmOverlay');
+  const mdConfirmYes = document.getElementById('mdConfirmYes');
+  const mdConfirmNo = document.getElementById('mdConfirmNo');
+  const mdConfirmCheck = document.getElementById('mdConfirmCheck');
+  let mdConfirmResolve = null;
+  function showMdConfirm(){
+    if(!mdConfirmOverlay) return Promise.resolve(true);
+    mdConfirmOverlay.hidden = false;
+    if(mdConfirmCheck) mdConfirmCheck.checked = false;
+    return new Promise(resolve => { mdConfirmResolve = resolve; });
+  }
+  function hideMdConfirm(result){
+    if(mdConfirmOverlay) mdConfirmOverlay.hidden = true;
+    if(mdConfirmResolve){ mdConfirmResolve(result); mdConfirmResolve = null; }
+  }
+  if(mdConfirmYes){
+    mdConfirmYes.addEventListener('click', () => {
+      if(mdConfirmCheck && mdConfirmCheck.checked){
+        try { localStorage.setItem('md_no_confirm_clear', '1'); } catch(e){}
+      }
+      hideMdConfirm(true);
+    });
+  }
+  if(mdConfirmNo){
+    mdConfirmNo.addEventListener('click', () => hideMdConfirm(false));
+  }
+  if(mdConfirmOverlay){
+    mdConfirmOverlay.addEventListener('click', (e) => {
+      if(e.target === mdConfirmOverlay) hideMdConfirm(false);
+    });
   }
 
-  document.getElementById('mdBtnClear').addEventListener('click', () => {
-    const skipConfirm = mdOptNoConfirm && mdOptNoConfirm.checked;
-    if(input.value && !skipConfirm && !confirm('确定要清空当前内容吗？')) return;
+  document.getElementById('mdBtnClear').addEventListener('click', async () => {
+    if(!input.value) return;
+    const skipConfirm = (() => { try { return localStorage.getItem('md_no_confirm_clear') === '1'; } catch(e){ return false; } })();
+    if(!skipConfirm){
+      const ok = await showMdConfirm();
+      if(!ok) return;
+    }
     input.value = '';
     render();
     input.focus();
   });
-  if(mdOptNoConfirm){
-    mdOptNoConfirm.addEventListener('change', () => {
-      try { localStorage.setItem('md_no_confirm_clear', mdOptNoConfirm.checked ? '1' : '0'); } catch(e){}
-    });
-  }
   document.getElementById('mdBtnCopyHtml').addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(preview.innerHTML);
@@ -2091,5 +2127,21 @@ $$\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}, \\quad A = \\begin{pmatrix} 1 & 2 \\\\ 
   waitKatex(doRender);
 })();
 </script>
+
+<!-- Markdown 清空确认弹窗 -->
+<div class="md-confirm-overlay" id="mdConfirmOverlay" hidden>
+  <div class="md-confirm-box">
+    <p>确定要清空当前内容吗？</p>
+    <label class="md-confirm-opt">
+      <input type="checkbox" id="mdConfirmCheck">
+      <span>以后不再提醒</span>
+    </label>
+    <div class="md-confirm-actions">
+      <button class="btn" id="mdConfirmNo">取消</button>
+      <button class="btn primary" id="mdConfirmYes">确定</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
