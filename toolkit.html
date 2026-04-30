@@ -467,6 +467,7 @@
             插入示例
           </button>
           <button class="btn ghost" id="mdBtnClear">清空</button>
+          <label class="md-opt"><input type="checkbox" id="mdOptNoConfirm">以后不再提醒</label>
           <label class="md-opt"><input type="checkbox" id="mdOptBreaks" checked>单行回车即换行</label>
           <label class="md-opt"><input type="checkbox" id="mdOptSync" checked>滚动同步</label>
           <label class="md-opt md-trans-toggle"><input type="checkbox" id="mdOptTrans">翻译为</label>
@@ -1634,11 +1635,23 @@ btnConvert.addEventListener('click', async ()=>{
     input.scrollTop = 0;
     preview.scrollTop = 0;
   });
+  const mdOptNoConfirm = document.getElementById('mdOptNoConfirm');
+  if(mdOptNoConfirm){
+    try { mdOptNoConfirm.checked = localStorage.getItem('md_no_confirm_clear') === '1'; } catch(e){}
+  }
+
   document.getElementById('mdBtnClear').addEventListener('click', () => {
+    const skipConfirm = mdOptNoConfirm && mdOptNoConfirm.checked;
+    if(input.value && !skipConfirm && !confirm('确定要清空当前内容吗？')) return;
     input.value = '';
     render();
     input.focus();
   });
+  if(mdOptNoConfirm){
+    mdOptNoConfirm.addEventListener('change', () => {
+      try { localStorage.setItem('md_no_confirm_clear', mdOptNoConfirm.checked ? '1' : '0'); } catch(e){}
+    });
+  }
   document.getElementById('mdBtnCopyHtml').addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(preview.innerHTML);
